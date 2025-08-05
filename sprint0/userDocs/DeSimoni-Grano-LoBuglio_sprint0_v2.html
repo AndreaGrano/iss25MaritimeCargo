@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ISS Final Project - Maritime Cargo</title>
+  <link rel="stylesheet" href="./style/style.css">
+</head>
+<body>
+  <h1>ISS Final Project - Maritime Cargo</h1>
+  <a href="https://github.com/anatali/issLab2025/blob/main/iss25Material/docs/_build/html/TemaFinale25.html">Final exam theme a.a. 2024/2025</a>
+  <hr>
+  <div id="toc">
+    <h2>Index</h2>
+    <ul id="toc-list"></ul>
+  </div>
+
+  <h2>1. Introduction</h2>
+  <p> 
+    A Maritime Cargo shipping company intends to automate the operations of load of 
+    freight in the ship’s cargo hold. To this end, the company plans to employ a 
+    Differential Drive Robot for the loading of goods in the ship's hold.
+  </p>
+
+  <h3>1.1 Our motto</h3>
+  <p>
+    <blockquote>There is no code without a project, 
+    there is no project without problem analysis, 
+    there is no problem without <b><u>requirements</u></b>.</blockquote>
+  </p>
+
+  <h3>1.2 Aims of sprint0</h3>
+  <p>
+    The aims of the current sprint are:
+    <ul>
+      <li>Formalization of the requirements analysis given by the customer, in order to make them machine-understandable</li>
+      <li>Agreement on the meanings of the requirements from both parties</li>
+      <li>Drafting of a general model of the system</li>
+      <li>Drafting of a primitive interaction schema</li>
+      <li>Design of executable test plans to show the customer the main behaviour of the system</li>
+    </ul>
+  </p>
+
+  <h3>1.3 Requirements</h3>
+  <p>
+    The requirements given by the customer can be found <a href="https://github.com/anatali/issLab2025/blob/main/iss25Material/docs/_build/html/TemaFinale25.html#tf2025-requirements">here</a>.<br>
+    We report them here:
+    <ul>
+      <li>To be loaded into the hold, the products must be registered in a database by specifying its weight using a proper service (<span class="keyword">productservice</span>)</li>
+      <li>At the end of the registration process, productservice returns a positive integer <b>Unique Product Identifier</b> <span class="keyword">PID</span></li>
+      <li>The hold is a rectangular, flat area with an Input/Output port (<span class="keyword">ioport</span>)</li>
+      <li>There are <span class="keyword">4 slots</span> provided for storage</li>
+      <li>There is an additional slot, but it's permanently occupied, so it acts like an obstacle (<span class="keyword">slot5</span>)</li>
+      <li>When the product is registered, a load request can be sent. If the weight is under a certain threshold (<span class="keyword">MAX_WEIGHT</span>) and if there is still at least 1 slot available, the request is accepted</li>
+      <li>If and when the load request is accepted, <span class="keyword">cargoservice</span> associates a slot to the product's <span class="keyword">PID</span> and returns the name of the reserved slot</li>
+      <li>After the association, <span class="keyword">cargoservice</span> waits for the product to be delivered at the <span class="keyword">ioport</span>. In the meantime, other requests will not be elaborated</li>
+      <li><span class="keyword">cargoservice</span> is able to detect (by means of the <span class="keyword">sonar sensor</span>) the presence of the product container at the <span class="keyword">ioport</span> when a distance less than <span class="keyword">DFREE/2</span> is measured for a reasonable time (e.g. 3s)</li>
+      <li><span class="keyword">cargoservice</span> is able to ensure that the product container is placed by the <span class="keyword">cargorobot</span> within its reserved slot</li>
+      <li>After placing the load in the reserved slot, <span class="keyword">cargorobot</span> should return to its <span class="keyword">HOME</span> location, then <span class="keyword">cargoservice</span> can start processing another load request</li>
+      <li><span class="keyword">cargoservice</span> is able to show the current state of the hold, by means of a dynamically updated <span class="keyword">web-gui</span></li>
+      <li><span class="keyword">cargoservice</span> interrupts any activity and turns on a LED if the <span class="keyword">sonar</span> sensor measures a distance <span class="keyword">D > DFREE</span> for at least 3s. The service continues its activities as soon as the <span class="keyword">sonar</span> measures a distance <span class="keyword">D &le; DFREE</span></li>
+    </ul>
+  </p>
+  <hr>
+
+  <h2>2. Requirements analysis</h2>
+  <h3>2.1 Requirements</h3>
+  <h4>2.1.1 Functional requirements</h4>
+  <table>
+    <tr>
+      <th>ID</th>
+      <th>Requirement</th>
+    </tr>
+    <tr id="rf1">
+      <td>RF1</td>
+      <td><span class="keyword">productservice</span>, a system component, offers the possibility to register every product by means of its name and its weight</td>
+    </tr>
+    <tr id="rf2">
+      <td >RF2</td>
+      <td>When the registration is successful, <span class="keyword">productservice</span> returns a <b>Unique Product Identifier</b>, namely <span class="keyword">PID</span>, a positive integer</td>
+    </tr>
+    <tr id="rf3">
+      <td >RF3</td>
+      <td>When the product is registered, a load request can be sent. The outcome is postive if the weight is under a certain threshold (<span class="keyword">MAX_WEIGHT</span>) and if there is still at least 1 slot available</td>
+    </tr>
+    <tr id="rf4">
+      <td >RF4</td>
+      <td>If and when the load request is accepted, <span class="keyword">cargoservice</span> associates a slot to the product <span class="keyword">PID</span> and returns the name of the reserved slot</td>
+    </tr>
+    <tr id="rf5">
+      <td >RF5</td>
+      <td>A product must be registered when a load request for it is done. After the request, <span class="keyword">cargoservice</span> waits for the product to be delivered at the <span class="keyword">ioport</span>. In the meantime, other requests will not be elaborated.<br>
+        Registration of a product does not imply that a load request must be issued. It is possible that no load request will ever be created for a registered product.
+      </td>
+    </tr>
+    <tr id="rf6">
+      <td >RF6</td>
+      <td><span class="keyword">cargoservice</span> is able to detect (by means of the <span class="keyword">sonar sensor</span>) the presence of the product container at the <span class="keyword">ioport</span> (when <span class="keyword">D &lt; DFREE/2</span> for a reasonable time, e.g. 3s) </td>
+    </tr>
+    <tr id="rf7">
+      <td >RF7</td>
+      <td><span class="keyword">cargoservice</span> is able to ensure that the product container is placed by the <span class="keyword">cargorobot</span> within its reserved slot</td>
+    </tr>
+    <tr id="rf8">
+      <td >RF8</td>
+      <td>After placing the load in the reserved spot, <span class="keyword">cargorobot</span> should return to its <span class="keyword">HOME</span> location</td>
+    </tr>
+    <tr id="rf9">
+      <td >RF9</td>
+      <td>After <span class="keyword">cargorobot</span> is back <span class="keyword">HOME</span>, <span class="keyword">cargoservice</span> can start processing another load-request</td>
+    </tr>
+    <tr id="rf10">
+      <td>RF10</td>
+      <td><span class="keyword">cargoservice</span> is able to show the current state of the hold, by mesans of a dynamically updated <span class="keyword">web-gui</span>.</td>
+    </tr>
+    <tr id="rf11">
+      <td>RF11</td>
+      <td><span class="keyword">cargoservice</span> interrupts any activity and turns on a LED if the sonar sensor measures a distance <span class="keyword">D > DFREE</span> for at least 3 secs</td>
+    </tr>
+    <tr id="rf12">
+      <td>RF12</td>
+      <td>The service continues its activities as soon as the sonar measures a distance <span class="keyword">D &le; DFREE</span></td>
+    </tr>
+    <tr id="rf13">
+      <td>RF13</td>
+      <td>The <span class="keyword">PID</span>s must be unique</td>
+    </tr>
+    <tr id="rf14">
+      <td>RF14</td>
+      <td><span class="keyword">cargorobot</span> should know its position in the <span class="keyword">hold</span></td>
+    </tr>
+    <tr id="rf15">
+      <td>RF15</td>
+      <td><span class="keyword">cargorobot</span> should know the positions of every <span class="keyword">slot</span> in the <span class="keyword">hold</span></td>
+    </tr>
+    <tr id="rf16">
+      <td>RF16</td>
+      <td><span class="keyword">cargorobot</span> should know which <span class="keyword">slots</span> are occupied</td>
+    </tr>
+    <tr id="rf17">
+      <td>RF17</td>
+      <td>The registration data should be stored in a database</td>
+    </tr>
+  </table>
+
+  <h4>2.1.2 Domain requirements</h4>
+  <table>
+    <tr>
+      <th>ID</th>
+      <th>Requirement</th>
+    </tr>
+    <tr>
+      <td>RD1</td>
+      <td>The <span class="keyword">hold</span> is a rectangular, flat area with an Input/Output port (<span class="keyword">ioport</span>)</td>
+    </tr>
+    <tr>
+      <td>RD2</td>
+      <td>There are <span class="keyword">4 slots</span> provided for storage</td>
+    </tr>
+    <tr>
+      <td>RD3</td>
+      <td>There is an additional slot (<span class="keyword">slot5</span>), but it's permanently occupied, so it acts like an obstacle</td>
+    </tr>
+  </table>
+
+  <h3>2.2 Dictionary</h3>
+  <table>
+    <tr>
+      <th>Noun</th>
+      <th>Definition</th>
+    </tr>
+    <tr>
+      <td>Company</td>
+      <td>Maritime Cargo shipping company</td>
+    </tr>
+    <tr>
+      <td>Hold</td>
+      <td>The ship's cargo hold</td>
+    </tr>
+    <tr>
+      <td>Differential Drive Robot</td>
+      <td>Robot that has 3 wheels, 2 of which are motorized and can rotate at different speeds</td>
+    </tr>
+    <tr>
+      <td>cargorobot</td>
+      <td>Software component that interacts with a Differential Drive Robot, employed in this application</td>
+    </tr>
+    <tr>
+      <td>cargoservice</td>
+      <td>Service that manages the load requests and cargorobot</td>
+    </tr>
+    <tr>
+      <td>productservice</td>
+      <td>Service that manages product registration</td>
+    </tr>
+    <tr>
+      <td>Slot</td>
+      <td>Area in the hold that might be used to house a product</td>
+    </tr>
+    <tr>
+      <td>Product</td>
+      <td>A good that is registered in the system and has a unique identifier</td>
+    </tr>
+    <tr>
+      <td>Input/Output Port</td>
+      <td>Area where a new load appears and it's ready for transport to its slot</td>
+    </tr>
+    <tr>
+      <td>Sonar</td>
+      <td>A ultrasonic sensor that detects distances</td>
+    </tr>
+    <tr>
+      <td>HOME</td>
+      <td>Upper left corner of hold</td>
+    </tr>
+    <tr>
+      <td>Alien</td>
+      <td>System-external entity that interacts with the system</td>
+    </tr>
+  </table>
+
+  <h3>2.3 General overview</h3>
+  <h4>2.3.1 Software provided by the customer</h4>
+  <ul>
+    <li>
+      <a href="https://github.com/anatali/issLab2025/tree/main/unibo.basicrobot24">BasicRobot</a> - software component which executes movement commands of a DDR-robot, 
+      regardless of the technology with which the robot is implemented (virtual or real)
+    </li>
+    <li>
+      <a href="https://github.com/anatali/issLab2025/tree/main/sonarLed2025/resources/python">RaspberryPi utility software</a>
+    </li>
+    <li>
+      <a href="https://github.com/anatali/issLab2025/tree/8789bc1ec22bed8ce3cda499ef08cc77840cc900/sonarLed2025">SonarLed2025</a> 
+      - a software already implemented and usable which
+      allows to get the distance from the sonar and to blink a LED
+    </li>
+  </ul>
+
+  <h4>2.3.3 Working area</h4>
+  This is the working area of this project.
+  <div class="image-container">
+    <img src="./img/workingarea.png" alt="Working area">
+    <div class="caption">Figure 1 – Working area</div>
+  </div>
+
+  <h2>3. Requirements formalization</h2>
+  The approach adopted in this section may indeed lend itself to certain ambiguities due to the use of language 
+  that is not machine-interpretable. However, we consider this choice valuable, as it enables readers of the documentation 
+  to fully understand the model derived from the customer's requirements. All elements described here will subsequently be 
+  formalized in QAK (the reasons for which are detailed in the following paragraph), ensuring that any potential ambiguities 
+  arising from natural language will be resolved.
+
+  <h3>3.1 Why QAK</h3>
+  We chose to model the system with the <a href="https://github.com/anatali/issLab2025/blob/main/iss25Material/docs/_build/html/QakActors25Linguaggio.html">QAK</a> meta-modelling language since the problem requires to follow the microservice and actors paradigms and this
+  DSL (Domain Specific Language) has been developed in order to fill the abstraction gap related to communication between those entities.
+  We also chose QAK for these reasons:
+  <ul>
+    <li>It was entirely implemented by our software house, which makes it easier to get information and support from the actual creator of the language</li>
+    <li>It provides a way to represent concepts related to services, such as request, response, dispatch, etc., while other general-purpose languages would need external libraries (e.g. Java would need some kind of JAR to implement Actors), frameworks or resources to do the same</li>
+    <li>It allows you to create executable models directly from the language, which capture the salient aspects of the requirements or problems</li>
+    <li>Our software house already has some project and components we could exploit and use</li>
+    <li>It's easy to create prototipes to show to the customer</li>
+  </ul>
+
+  <h3>3.2 Entities</h3>
+  As in all complex software systems, we will decompose the overall system into high-level 
+  software macro-components, which will be progressively listed and formalized. The categories of components that 
+  can be defined are:
+  <ul>
+    <li><b>POJO</b></li>
+    <li><b>Actors</b>: In the context of the QAK language, 
+      Actors are autonomous entities that encapsulate state and behavior, 
+      communicate with each others, and can react to events or messages 
+      in a concurrent and decoupled manner. Each Actor processes incoming messages sequentially, 
+      enabling safe concurrent execution within the system. <br>
+      Sometimes, the terms Actor and Service are used interchangeably. 
+      The distinction is that an Actor interacting with remote entities is typically referred to as a Service, 
+      while an Actor managing only local entities is simply an Actor.
+    </li>
+  </ul>
+
+  <table id="entities">
+    <tr>
+      <th>Entity</th>
+      <th>Activity</th>
+      <th>Type</th>
+      <th>Description/Behaviour</th>
+    </tr>
+    <tr>
+      <td><span class="keyword">productService</span></td>
+      <td>Reactive & proactive</td>
+      <td>Service</td>
+      <td>
+        Actor that receives and handles products creation and deletion requests.
+        It associates a PID to a product.
+      </td>
+    </tr>
+    <tr>
+      <td><span class="keyword">cargoService</span></td>
+      <td>Reactive & proactive</td>
+      <td>Service</td>
+      <td>The mind of the system: it handles requests to <span class="keyword">cargorobot</span> and consults, updates and manages 
+        the product database and <span class="keyword">cargorobot</span>. It also sends updates to the <span class="keyword">web-gui</span>. 
+      </td>
+    </tr>
+    <tr>
+      <td><span class="keyword">cargorobot</span></td>
+      <td>Reactive</td>
+      <td>Actor</td>
+      <td>The main entity of the maritime cargo system, which moves within the hold area and 
+          performs product delivery to a slot when <span class="keyword">sonar sensor</span> detects its arrival at the <span class="keyword">ioport.</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">web-gui</span></td>
+      <td>Reactive</td>
+      <td>Actor</td>
+      <td>Entity that receives data from the <span class="keyword">cargoService</span> and updates a web-GUI, used to monitor the status of the hold. 
+        We model it as an actor beacuse it processes messages one by one and updates the web-GUI accordingly. </td>
+    </tr>
+    <tr>
+      <td><span class="keyword">testCargo</span></td>
+      <td>Proactive</td>
+      <td>(Test)<br>Actor</td>
+      <td>Test actor that sends dummy requests to the <span class="keyword">cargoService</span>  in order to verify how the whole system reacts.</td>
+    </tr>
+  </table>
+
+  <h3>3.3 Data</h3>
+  We had chosen <span class="keyword">Kotlin</span> because it provides the built-in syntax necessary to declare our model elements 
+  and can be included in QAK code.
+
+  <table id="data">
+    <tr>
+      <th>Data</th>
+      <th>Type</th>
+      <th>Description</th>
+    </tr>
+    <tr>
+      <td>productWeight</td>
+      <td>Floating point variable</td>
+      <td>
+        It's the container weight to load expressed in kg (productWeight > 0).
+        <pre><code>var productWeight : Float // productWeight > 0</code></pre>
+      </td>
+    </tr>
+    <tr>
+      <td>D</td>
+      <td>Integer variable</td>
+      <td>
+        It indicates the current distance (in cm) measured by the sonar.
+        <pre><code>var D : Int</code></pre>
+      </td>
+    </tr>
+    <tr>
+      <td>PID</td>
+      <td>Integer variable</td>
+      <td>
+        It indicates the product ID (PID &gt; 0)
+        <pre><code>var PID : Int</code></pre>
+      </td>
+    </tr>
+    <tr>
+      <td>DFREE</td>
+      <td>Integer constant</td>
+      <td>
+        It is the max distance (in cm) that the sonar can measure before the system assumes that it's broken.
+        <pre><code>const val DFREE : Int</code></pre>
+      </td>
+    </tr>
+    <tr>
+      <td>MAX_LOAD</td>
+      <td>Floating point constant</td>
+      <td>
+        It's the max weigth (in kg) that can be loaded in the hold.
+        <pre><code>const val MAX_LOAD : Float</code></pre>
+      </td>
+    </tr>
+    <tr>
+      <td>SLOTS</td>
+      <td>Integer constant</td>
+      <td>
+        It's the number of slots in the hold.
+        <pre><code>const val SLOTS : Int // SLOTS = 5 in this case</code></pre>
+      </td>
+    </tr>
+  </table>
+
+
+  <h3>3.4 Messages</h3>
+  <table id="messages">
+    <tr>
+      <th>Messages</th>
+      <th>Type</th>
+      <th>Sender</th>
+      <th>Receiver</th>
+      <th>Description</th>
+    </tr>
+    <tr>
+      <td><span class="keyword">getProduct</span></td>
+      <td>Request</td>
+      <td>cargoService</td>
+      <td>productService</td>
+      <td>Requests the PID of a product</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">loadProduct</span></td>
+      <td>Request</td>
+      <td>Alien</td>
+      <td>cargoService</td>
+      <td>Requests the load in the hold of a given product</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">loadAccepted</span></td>
+      <td>Reply</td>
+      <td>cargoService</td>
+      <td>Alien</td>
+      <td>The product can be loaded on the hold as requested (there is at least one slot free and the weight is less or equal to the MAX_WEIGHT)</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">loadRejected</span></td>
+      <td>Reply</td>
+      <td>cargoService</td>
+      <td>Alien</td>
+      <td>The product can't be loaded on the hold as requested (there isn't any free slot or the weight would be greater than the MAX_WEIGHT)</td>
+    </tr>
+  </table>
+
+  <h2>4. Model</h2>
+  <h3>4.1 Logical Architecture</h3>
+  <a href="../src/sprint0.qak">QAK model</a><br>
+  <div class="image-container">
+    <img src="./img/model0_1.png" alt="Logical architecture">
+    <div class="caption">Figure 2 – Logical Architecture</div>
+  </div>
+
+  <h2>5. Test plans</h2>
+  <h3>5.1 Interaction: Alien → cargoService</h3>
+  To verify the interaction between Alien and cargoservice 
+  we realized the following test; as for the Alien entity we used testCargo.
+  <ol>
+    <li>
+      <b>Product exists, it does not weigh too much and there is a free slot</b>, therefore the load request is <b style="color:green">accepted</b>.
+    </li>
+    <li><b>Product does NOT exist</b>, therefore the load request is <b style="color:red">rejected</b>.</li>
+    <li><b>Product weighs too much</b> and if we add it to the hold we are exceeding hold's MAX_WEIGHT, therefore the load request is <b style="color:red">rejected</b>.</li>
+    <li><b>Product exists, it does not weigh too much</b>, but all slots are occupied, therefore the load request is <b style="color:red">rejected</b>.</li>
+  </ol>
+  To consult JUnit code click <a href="../src/test/java/LoadTest.java">here</a>.<br>
+  To consult QAK test load click <a href="../src/test_load.qak">here</a>.
+
+  <h2>6. Miscellaneous references</h2>
+  <ul>
+    <li><a href="https://scrumguides.org/">SCRUM</a></li>
+    <li><a href="https://github.com/anatali/issLab2025">Prof. Antonio Natali's GitHub page</a></li>
+  </ul>
+
+  <h2>7. Sprint conclusions</h2>
+
+  <h3>7.1 Summary</h3>
+  This first Sprint (Sprint0) grouped the requirements of the project, by outlining the following macro components, ordered by priority:
+  <ol>
+    <li id="core-business">
+      Core-business (requirements 
+        <a href="#rf1">RF1</a>, <a href="#rf2">RF2</a>, <a href="#rf3">RF3</a>, <a href="#rf4">RF4</a>, <a href="#rf7">RF7</a>, <a href="#rf8">RF8</a>, <a href="#rf9">RF9</a>,
+        <a href="#rf13">RF13</a>, <a href="#rf14">RF14</a>, <a href="#rf15">RF15</a>, <a href="#rf16">RF16</a>, <a href="#rf17">RF17</a>): 
+        involves the chain of the main nodes of the system.<br>
+      <b style="color: red;">HIGH PRIORITY</b>: the service can't be provided without it.
+    </li>
+    <li id="ioport">ioport
+      (requirements <a href="#rf5">RF5</a>, <a href="#rf6">RF6</a>, <a href="#rf11">RF11</a>, <a href="#rf12">RF12</a>):
+        involves the delivery of products to the right reserved slot.<br>
+      <b style="color: orange;">MEDIUM PRIORITY</b>: the service can receive requests but can't take the product to the reserved slot without it.
+    </li>
+    <li id="web-gui">GUI (requirement <a href="#rf10">RF10</a>): shows the current state of the hold<br>
+      <b style="color: green;">LOW PRIORITY</b>: the system correctly works, this is an "additional service".</li>
+  </ol>
+
+  <h3>7.2 Open issues</h3>
+  During the Sprint0 we found out the following open issues to ask to the customer:
+  <ul>
+    <li>Alien: which entity gives the input for product creation, deletion and load?</li>
+    <li>
+      Request queue: when a load request arrives when the system is stopped for sensor failure, which policy we should use:
+      <ul>
+        <li>The request is processed immediately and rejected. The requester must resubmit the load request.</li>
+        <li>The request is queued and processed once the system becomes available again.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>7.3 Workplan</h3>
+  We decided to partition the system into 3 main sprints, which follows the macro components mentioned above.
+  <ol>
+    <li><b>Sprint1 - core-business</b></li>
+    <li><b>Sprint2 - ioport</b></li>
+    <li><b>Sprint3 - web-gui</b></li>
+  </ol>
+
+  <table>
+    <tr>
+      <th>Sprint</th>
+      <th>Start</th>
+      <th>End</th>
+      <th>Man-hours</th>
+    </tr>
+    <tr>
+      <td>Sprint1</td>
+      <td>07/07/2025</td>
+      <td>14/07/2025</td>
+      <td>17</td>
+    </tr>
+    <tr>
+      <td>Sprint2</td>
+      <td>15/07/2025</td>
+      <td>18/07/2025</td>
+      <td>7</td>
+    </tr>
+    <tr>
+      <td>Sprint3</td>
+      <td>21/07/2025</td>
+      <td>24/07/2025</td>
+      <td>11</td>
+    </tr>
+  </table>
+  The workplan outlined herein is indicative and may be subject to change.
+  The team will make every reasonable effort to adhere to the planned schedule and activities as closely as possible.
+  Any significant variations or adjustments to the workplan will be communicated in due course as the project progresses.
+
+  <h2>Developing Team</h2>
+  <div class="team">
+    <div class="member">
+      <img src="./img/profilePictures/clarissadesimoni.jpg" alt="Clarissa De Simoni">
+      <div class="member-name">Clarissa De Simoni</div>
+      <div class="member-role">0001139600</div>
+      <a href="mailto:clarissa.desimoni@studio.unibo.it">clarissa.desimoni@studio.unibo.it</a>
+    </div>
+    <div class="member">
+      <img src="./img/profilePictures/andreagrano.jpg" alt="Andrea Grano">
+      <div class="member-name">Andrea Grano</div>
+      <div class="member-role">0900087513</div>
+      <a href="mailto:andrea.grano@studio.unibo.it">andrea.grano@studio.unibo.it</a>
+    </div>
+    <div class="member">
+      <img src="./img/profilePictures/andrealobuglio.jpg" alt="Andrea Lo Buglio">
+      <div class="member-name">Andrea Lo Buglio</div>
+      <div class="member-role">0001193726</div>
+      <a href="mailto:andrea.lobuglio@studio.unibo.it">andrea.lobuglio@studio.unibo.it</a>
+    </div>
+  </div>
+  <script src="./script/index.js"></script>
+</body>
+</html>
+

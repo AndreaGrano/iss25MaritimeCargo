@@ -1,0 +1,154 @@
+System test_load
+
+// MESSAGES
+Request createProduct 		:	createProduct(Name)
+Reply	createdProduct		:	createdProduct(PID) for createProduct
+
+Request	deleteProduct		:	deleteProduct(PID)
+Reply	deletedProduct		:	deletedProduct(Name) for deleteProduct
+
+Request	getProduct			:	getProduct(PID)
+Reply	getProductAnswer	:	product(Name) for getProduct
+
+Request	loadProduct			:	loadProduct(PID, Weigth)
+Reply	loadAccepted		:	loadAccepted(V) for loadProduct
+Reply	loadRefused			:	loadRefused(Reason) for loadProduct
+
+Dispatch goToWait			:	goToWait(V)
+
+// CONTEXTS
+Context ctxcargoservice	ip[host="localhost" port=8001]
+Context ctxtestcargo	ip[host="localhost" port=8004]
+
+
+// ACTORS
+QActor cargoservice context ctxcargoservice {
+	[#
+			val MAX_LOAD = 100
+			
+			var totalWeigth = 0.0
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color blue
+		
+		println("$name: initialization complete") color blue
+	}
+	Goto wait
+	
+	State wait {		
+		println("$name: waiting for requests...") color blue
+	}
+	Transition t0
+		whenRequest loadProduct ->	loadproduct
+		
+	State loadproduct {
+		printCurrentMessage color blue
+		
+		onMsg(loadProduct : loadProduct(PID, Weigth)) {
+			if [# totalWeigth < MAX_LOAD #] {
+				[#
+					val PID = payloadArg(0).toInt()
+					val weigth = payloadArg(1).toDouble()
+					totalWeigth = totalWeigth + weigth
+				#]
+				
+				request dbwrapper -m getProduct : getProduct($PID)
+			} else {
+				[# var Message = "Too heavy" #]
+				replyTo loadProduct with loadRefused : loadRefused($Message)
+				
+				println("$name: load refused: too heavy") color blue
+				
+				autodispatch goToWait : goToWait(1)
+			}
+		}
+	}
+	Transition t1
+		whenReply	getProductAnswer	->	getproductanswered
+		whenMsg		goToWait			->	wait
+		
+	State getproductanswered {
+		onMsg(getProductAnswer : getProductAnswer(Name)) {
+			[# var name = payloadArg(0) #]
+			
+			if [# name.equals("NOTFOUND") #] {
+				[# var Message = "Not found" #]
+				replyTo loadProduct with loadRefused : loadRefused($Message)
+				
+				println("$name: load refused: product does not exist") color blue
+			} else {
+				replyTo loadProduct with loadAccepted : loadAccepted(1)
+				
+				println("$name: load accepted") color blue
+			}
+		}
+	}
+	Goto wait
+}
+
+QActor dbwrapper context ctxcargoservice {
+	// in the future there will be a DB
+	[# var DB = ArrayList<String>() #]
+		
+	State init initial {
+		println("$name: STARTING...") color yellow
+		
+		println("$name: initialization complete") color yellow
+	}
+	Goto wait
+	
+	State wait {
+		println("$name: waiting...") color yellow
+	}
+	Transition t0
+		whenRequest getProduct	->	getproduct
+		
+		State createproduct {
+		printCurrentMessage color cyan
+		
+		onMsg(createProduct : createProduct(Name)) {
+			[#
+				val name = payloadArg(0)
+				DB.add(name)
+				var PID = DB.indexOf(name)
+			#]
+			
+			replyTo createProduct with createdProduct : createdProduct($PID)
+		}
+	}
+	Goto wait
+	
+	State deleteproduct {
+		printCurrentMessage color cyan
+		
+		onMsg(deleteProduct : deleteProduct(PID)) {
+			[#
+				val PID = payloadArg(0).toInt()
+				var Name = DB.get(PID)
+				DB.removeAt(PID)
+			#]
+			
+			replyTo deleteProduct with deletedProduct : deletedProduct($Name)
+		}
+	}
+	Goto wait
+	
+	State getproduct {
+		printCurrentMessage color cyan
+		
+		onMsg(getProduct : getProduct(PID)) {
+			[#
+				val PID = payloadArg(0).toInt()
+				var Name = DB.getOrNull(PID)
+				
+				if(Name == null) {
+					Name = "NOTFOUND"
+				}
+			#]
+			
+			replyTo getProduct with getProductAnswer : getProductAnswer($Name)
+		}
+	}
+	Goto wait
+}

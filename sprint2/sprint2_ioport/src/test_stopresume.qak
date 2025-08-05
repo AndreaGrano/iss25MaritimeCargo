@@ -1,0 +1,126 @@
+System test_stopresume
+mqttBroker "localhost" : 1883 eventTopic "alarmevents"
+
+// MESSAGES
+// sonarwrapper -> alarmdevice
+Event	distance	:	distance(D)
+
+// events from alarmdevice
+Event	stop	:	stop(V)
+Event	resume	:	resume(V)
+
+
+// CONTEXTS
+Context ctxioport ip[host="localhost" port=8007]
+Context ctxcargoservice ip[host="127.0.0.1" port=8003]
+
+// ACTORS
+ExternalQActor cargoservice context ctxcargoservice
+
+QActor sonarwrapper context ctxioport {
+	import "java.io.*"
+	[#
+		lateinit var p : Process
+		lateinit var reader : BufferedReader 
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color magenta
+		
+		[#
+			try {
+				p = Runtime.getRuntime().exec("python sonar.py")
+				reader = BufferedReader(InputStreamReader(p.getInputStream()))
+			} catch(e : Exception) {
+				println("sonarwrapper sonarStart ERROR: $e")
+			}
+		#]
+		
+		println("$name: initialization complete") color magenta
+	}
+	Goto sendsonardata
+	
+	State sendsonardata {
+		[#
+			try {
+				var V = reader.readLine()
+				if(V != null) {
+					val payload = "distance( ${V} )"
+					val event = MsgUtil.buildEvent("sonardevice", "sonardata", payload)
+					
+					emitLocalStreamEvent(event)
+				}
+			} catch(e : Exception) {
+				println("sonardevice sendSonarData ERROR: $e")
+			}
+		#]
+		
+		delay 1000 // new data every second
+	}
+	Goto sendsonardata
+}
+
+QActor alarmdevice context ctxioport {
+	[#
+		lateinit var p : Process
+		
+		val DFREE = 10
+		var alarmCount = 0
+		var alarm = false
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color red
+		
+		subscribeTo sonarwrapper for distance	
+		
+		println("$name: initialization complete") color red
+	}
+	Goto wait
+	
+	State wait {
+		println("$name: waiting for distances...") color red
+	}
+	Transition t0
+		whenEvent distance -> evaluatedistance
+		
+	State evaluatedistance {
+		if [# alarm == false #] {
+			if [# alarmCount < 3 #] {
+				if [# V > DFREE #] {
+					[# alarmCount += 1 #]
+				} else {
+					[# alarmCount = 0 #]
+				}
+			} else {
+				println("$name: ALARM!") color red
+				
+				[# 
+					if(p.isAlive()) {
+						p.destroy()
+					}
+					p = machineExec("python ledPython25On.py") 
+				#]
+				
+				emit stop : stop(1)
+				emit stop : stop(1)
+			}
+		} else {
+			if [# V <= DFREE #] {
+				println("$name: everything is ok!") color red
+				
+				[# 
+					alarmCount = 0 
+					
+					if(p.isAlive()) {
+						p.destroy()
+					}
+					p = machineExec("python ledPython25Off.py")
+				#]
+				
+				emit resume : resume(1)
+				emit resume : resume(1)
+			}
+		}
+	}
+}

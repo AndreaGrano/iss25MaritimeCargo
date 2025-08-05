@@ -1,0 +1,148 @@
+System iss25maritimecargo_sprint1
+
+// MESSAGES
+Request createProduct 		:	createProduct(Name)
+Reply	createdProduct		:	createdProduct(PID) for createProduct
+
+Request	deleteProduct		:	deleteProduct(PID)
+Reply	deletedProduct		:	deletedProduct(Name) for deleteProduct
+
+Request	getProduct			:	getProduct(PID)
+Reply	getProductAnswer	:	product(Name) for getProduct
+
+Request	loadProduct			:	loadProduct(PID, Weigth)
+Reply	loadAccepted		:	loadAccepted(V) for loadProduct
+Reply	loadRejected			:	loadRejected(Reason) for loadProduct
+
+Dispatch goToWait			:	goToWait(V)
+
+// cargorobot -> BasicRobot
+Request step       			:	step(TIME)	
+Reply 	stepdone     		:	stepdone(V) for step
+Reply 	stepfailed   		:	stepfailed(DURATION, CAUSE) for step
+
+
+// CONTEXTS
+Context ctxcargoservice	ip[host="localhost" port=8001]
+Context ctxcargorobot	ip[host="localhost" port=8003]
+Context ctxclient		ip[host="localhost" port=8005]
+
+
+// ACTORS
+ExternalQActor basicrobot context ctxcargorobot
+ExternalQActor planner context ctxcargorobot
+
+// actors operating on the hold
+QActor productservice context ctxcargoservice {
+	State init initial {
+		println("$name: STARTING...") color cyan
+		
+		
+		
+		println("$name: initialization complete") color cyan
+	}
+}
+
+QActor cargoservice context ctxcargoservice {
+	[#
+			val MAX_LOAD = 100
+			val SLOTS = 4
+			
+			var totalWeigth = 0.0F
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color blue
+		
+		println("$name: initialization complete") color blue
+	}
+	Goto wait
+	
+	State wait {		
+		println("$name: waiting for requests...") color blue
+	}
+	Transition t0
+		whenRequest loadProduct ->	loadproduct
+		
+	State loadproduct {
+		printCurrentMessage color blue
+		
+		onMsg(loadProduct : loadProduct(PID, Weigth)) {
+			if [# totalWeigth < MAX_LOAD #] {
+				[#
+					val PID = payloadArg(0).toInt()
+					val weigth = payloadArg(1).toDouble()
+					totalWeigth = totalWeigth + weigth
+				#]
+				
+				request productservice -m getProduct : getProduct($PID)
+			} else {
+				[# var Message = "Too heavy" #]
+				replyTo loadProduct with loadRejected : loadRejected($Message)
+				
+				println("$name: load refused: too heavy") color blue
+				
+				autodispatch goToWait : goToWait(1)
+			}
+		}
+	}
+	Transition t1
+		whenReply	getProductAnswer	->	getproductanswered
+		whenMsg		goToWait			->	wait
+		
+	State getproductanswered {
+		onMsg(getProductAnswer : getProductAnswer(Name)) {
+			[# var name = payloadArg(0) #]
+			
+			if [# name.equals("NOTFOUND") #] {
+				[# var Message = "Not found" #]
+				replyTo loadProduct with loadRejected : loadRejected($Message)
+				
+				println("$name: load refused: product does not exist") color blue
+			} else {
+				replyTo loadProduct with loadAccepted : loadAccepted(1)
+				
+				println("$name: load accepted") color blue
+			}
+		}
+	}
+	Goto wait
+}
+
+// actors operating on the cargorobot
+QActor cargorobot context ctxcargorobot {
+	import "main.java.Planner"
+	State init initial {
+		println("$name: STARTING...") color green
+	}
+	Goto idle
+	
+	State idle {
+		println("$name: idle at home...") color green
+		
+		delay 3000 //cargorobot waiting for a new container to be waiting at the ioport
+	}
+	Goto movetoioport
+		
+	State movetoioport {
+		
+	}
+	Goto movetoslot
+	
+	State movetoslot {
+		
+	}
+	Goto movebackhome
+	
+	State movebackhome {
+		
+	}
+	Goto idle
+}
+
+// actors operating on the edge of the system
+QActor client context ctxclient {
+	State init initial {
+		println("$name: STARTING")
+	}
+}

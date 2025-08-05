@@ -1,0 +1,61 @@
+System iss25maritimecargo_sprint2_ioport
+
+// MESSAGES
+// sonarwrapper -> cargoservice
+Request	containerWaiting	:	containerWaiting(V)
+Reply	containerLoaded		:	containerLoaded(V) for containerWaiting
+
+// sonarwrapper -> containermanager, alarmdevice
+Event	distance	:	distance(D)
+
+// interrupts from alarmdevice
+Event	stop	:	stop(V)
+Event	resume	:	resume(V)
+
+
+// CONTEXTS
+Context ctxioport ip[host="localhost" port=8007]
+
+// ACTORS
+QActor sonarwrapper context ctxioport {
+	import "java.io.*"
+	[#
+		lateinit var p : Process
+		lateinit var reader : BufferedReader 
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color magenta
+		
+		[#
+			try {
+				p = Runtime.getRuntime().exec("python sonar.py")
+				reader = BufferedReader(InputStreamReader(p.getInputStream()))
+			} catch(e : Exception) {
+				println("sonarwrapper sonarStart ERROR: $e")
+			}
+		#]
+		
+		println("$name: initialization complete") color magenta
+	}
+	Goto sendsonardata
+	
+	State sendsonardata {
+		[#
+			try {
+				var V = reader.readLine()
+				if(V != null) {
+					val payload = "distance( ${V} )"
+					val event = MsgUtil.buildEvent("sonardevice", "sonardata", payload)
+					
+					emitLocalStreamEvent(event)
+				}
+			} catch(e : Exception) {
+				println("sonardevice sendSonarData ERROR: $e")
+			}
+		#]
+		
+		delay 1000 // new data every second
+	}
+	Goto sendsonardata
+}

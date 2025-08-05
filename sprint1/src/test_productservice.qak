@@ -1,0 +1,43 @@
+System test_productservice
+
+// MESSAGES
+// client -> productservice
+Request createProduct 		:	createProduct(Name)
+Reply	createdProduct		:	createdProduct(PID) for createProduct
+
+Request	deleteProduct		:	deleteProduct(PID)
+Reply	deletedProduct		:	deletedProduct(Name) for deleteProduct
+
+
+// CONTEXTS
+Context ctxcargoservice	ip[host="localhost" port=8001]
+
+
+// ACTORS
+QActor productservice context ctxcargoservice {
+	[# var CurrProdName = "" #]
+	
+	State init initial {
+		println("$name: STARTING...") color cyan
+		
+		delegate createProduct to dbwrapper
+		delegate deleteProduct to dbwrapper
+		
+		println("$name: initialization complete") color cyan
+	}
+}
+
+QActor dbwrapper context ctxcargoservice {
+	State init initial {
+		println("$name: STARTING...") color yellow
+		
+		//INIT OP
+		
+		println("$name: initialization complete") color yellow
+	}
+	Goto work
+	
+	State work {
+		//TODO
+	}
+}

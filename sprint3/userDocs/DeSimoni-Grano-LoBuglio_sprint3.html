@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ISS Final Project - Maritime Cargo</title>
+  <link rel="stylesheet" href="./style/style.css">
+</head>
+<body>
+  <h1>ISS Final Project - Maritime Cargo</h1>
+  <a href="https://github.com/anatali/issLab2025/blob/main/iss25Material/docs/_build/html/TemaFinale25.html">Final exam theme a.a. 2024/2025</a>
+  <hr>
+  <div id="toc">
+    <h2>Index</h2>
+    <ul id="toc-list"></ul>
+  </div>
+  <h2>1. Introduction</h2>
+  <p> 
+    A Maritime Cargo shipping company intends to automate the operations of load of 
+    freight in the ship’s cargo hold. To this end, the company plans to employ a 
+    Differential Drive Robot for the loading of goods in the ship's hold.
+  </p>
+
+  <h3>1.1 Our motto</h3>
+  <p>
+    <blockquote>There is no code without a project, 
+    there is no project without <b><u>problem analysis</u></b>, 
+    there is no problem without requirements.</blockquote>
+  </p>
+
+  <h3>1.2 Model architecture from sprint2</h3>
+  <div class="image-container">
+    <img width="90%" alt="logicalArchitecture" title="logicalArchitecture" src="./img/model_sprint3.png">  
+    <div class="caption">Figure 0 – Model architecture</div>
+  </div>
+
+  <h3>1.3 Aims of sprint3</h3>
+  <p>
+    The aims of the current sprint are:
+    <ul>
+      <li>Development of a dinamically updated <span class="keyword">web-gui</span> that shows the current state of the <span class="keyword">hold</span></li>
+      <li>As reported in the <a href="../../../sprint1/userDocs/DeSimoni-Grano-LoBuglio_sprint1_v1.html#6-conclusions">conclusions of sprint1</a>, development of a <span class="keyword-other">user interface</span>, possibly another page of the web-gui, that enables a user, a <span class="keyword">client</span>, to interact with the system (i.e. in order to request products' insertion and deletion and submit load requests)</li>
+      <li>Testing of the implemented GUIs</li>
+    </ul>
+  </p>
+
+  <h2>2. Requirements formalization</h2>
+  <p>
+    Within this sprint, we will be focusing on the requirement 
+    <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf10">RF10</a>
+    and, as stated before, on the addition that came in the <a href="../../../sprint1/userDocs/DeSimoni-Grano-LoBuglio_sprint1_v1.html#6-conclusions">sprint1's conclusion</a>.
+
+    The starting point of the current sprint are the following tables, resulting from the requirement analysis from sprint0:
+    <ul>
+      <li><a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v2.html#entities">Entities</a></li>
+      <li><a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v2.html#data">Data</a></li>
+      <li><a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v2.html#messages">Messages</a></li>
+    </ul>
+    </p>
+
+  </p>
+
+  <h3>2.4 Working area</h3>
+  <p>The robot will move around the following working area:</p>
+  <div class="image-container">
+    <img src="./img/workingarea.png" alt="Working area">
+    <div class="caption">Figure 1 – Working area</div>
+  </div>
+  <p>The relevant areas are:
+    <ul>
+        <li><span style="color:#df4143">HOME</span>: upper left corner in which the robot has to stay when it's in idle</li>
+        <li><span style="color:#4c7cc3">ioport</span>: opening in the lower left border from which the robot retrieves the containers</li>
+        <li><span style="color:#ba67ca">slot{1..4}</span>: they're the designated areas where the robot has to leave the containers</li>
+        <li><span style="color:#ba67ca">slot5</span>: permanently occupied area that the robot has to avoid</li>
+    </ul>
+  </p>
+
+  <h2>3. Problem analysis</h2>
+  <h3>3.1 A dinamically updated web-gui</h3>
+  <p>Many tecnologies can be used for this purpose. We obviously need to implement a front-end and use some protocols in order to manage the information flow.</p>
+  <blockquote>Problem: how can the system update the web-gui's front-end?</blockquote>
+  <p>
+    Since it's the system that must update the <span class="keyword">web-gui</span> on the changes to the status hold, we need a protocol that can implement the <span class="keyword-other">push</span> tecnology.
+    Another possibility could be the implementation of a <span class="keyword-other">polling technique</span>, but it would add further realization difficulties and possibly some useless overhead to the system.<br>
+    So, we have basically two immediate options:
+    <ul>
+      <li>MQTT: a publish/subscibe protocol</li>
+      <li>WebSocket: a protocol that enables full-duplex communications over a single TCP connection and push messages</li>
+    </ul>
+    Since we have to develop a web page, we must consider that, due to security reasons, the use of MQTT is prohibited. There is an implementation from paho of that protocol for JavaScript, but it is just an interface and the protocol implementation actually utilizes WebSocket underneath.
+    So, we decided to use <span class="keyword">WebSocket</span>. In addition, we're going to exploit the full-duplex channel, since the user interface will enable the user to interact with the system (i.e. sending requests), as this is another goal that we established for this sprint.
+  </p>
+  <blockquote>Question: how can we design and develop a dinamically updated web-gui?</blockquote>
+  <p>
+    The tecnologies that can be used for this purpose are too many to be enumerated in this documentation and it is outside of its scope.
+    Our team has already had some experience developing web-guis with <span class="keyword">React</span>, which is a JavaScript library focused, also, on the development of dinamically updated web pages; it is also very efficient, ensuring the cost of any update would be minimal.
+    Therefore, <b>its use is strongly recommended</b>.
+    <div class="image-container">
+      <a href="https://react.dev/"><img width="90%" alt="React" title="React" src="./img/React.jpg"></a>  
+      <div class="caption">Figure 2 – React</div>
+    </div>
+  </p>
+  <blockquote>Problem: where will we put the user interfaces for the various requests?</blockquote>
+  <p>
+    We have two types of requests a user may want to submit to the system:
+    <ul>
+      <li>Creation/deletion of products requests to the <span class="keyword">productservice</span> microservice</li>
+      <li>Load requests to <span class="keyword">cargoservice</span></li>
+    </ul>
+    As stated, <span class="keyword">productservice</span> is a microservice, therefore it will need an ad-hoc indipendent gui that enables users to create/delete product in the database, inserting the required information, i.e. name and weight.<br>
+    On the other end, load requests are submitted to the "core" system in <span class="keyword">cargoservice</span> and can be put in the same page as the one representing the hold's status.
+    This will be handy, since a user may want to verify the hold's status before submitting his load request.
+  </p>
+
+  <h3>3.2 Interaction form the core system to the web-gui</h3>
+  <p>
+    The core system, i.e. <span class="keyword">cargoservice</span>, must interact with the <span class="keyword-other">web-gui</span> sending all updates on the hold's status.
+    When a load request is accepted, the user interface can notify the reply to the user and also update the representation of the hold. <br>
+    But now there are some arising problems... 
+  </p>
+  <blockquote>Problem: what happens if more instances of the web-gui are opened at the same time?</blockquote>
+  <p>
+    From the perspective of the submission of load requests nothing really changes, since requests are queued in the core sysytem by <span class="keyword">cargoservice</span> and evaluated sequentially anyway.<br>
+    Nonetheless, if an instance of the <span class="keyword-other">web-gui</span> has previously submitted a load requests that has been accepted, the new ones needs to initialize the hold status correctly.
+    Furthermore, when a new load request is accepted every instance of the <span class="keyword-other">web-gui</span> needs to be updated. 
+    <br>During the <a href="../../sprint1/userDocs/DeSimoni-Grano-LoBuglio_sprint1_v2.html#42-part-2-mongodb-adoption-and-implementation-of-a-middleware">development phase of sprint1</a>, it has been introduced <span class="keyword">holdManager</span>, an actor that is responsible for slot assignment logic and hold's load information management.
+    It seems natural to give him the task to interact with the <span class="keyword-other">web-gui</span> whenever he does one of his operations. For those porpuses, the following messages will be added:
+    <table>
+      <tr>
+        <th>Messages</th>
+        <th>Type</th>
+        <th>Sender</th>
+        <th>Receiver</th>
+        <th>Description</th>
+      </tr>
+      <tr>
+        <td>getHoldStatus</td>
+        <td>Request</td>
+        <td>A new instance of the web-gui</td>
+        <td>holdManager</td>
+        <td>In order to properly initialize the hold's representation, a new instance of the web-gui requests the current status of the hold</td>
+      </tr>
+      <tr>
+        <td>holdStatus</td>
+        <td>Reply</td>
+        <td>holdManager</td>
+        <td>A new instance of the web-gui</td>
+        <td>The reply containing the hold's status, i.e. every slot with the PIDs and weights eventually associated</td>
+      </tr>
+      <tr>
+        <td>holdChanged</td>
+        <td>Event</td>
+        <td>holdManager</td>
+        <td>-</td>
+        <td>An event informing that the status of the hold has changed</td>
+      </tr>
+    </table>
+  </p>
+
+  <blockquote>Problem: data representation in communications to the web-gui</blockquote>
+  <p>
+    In order to exchange data to the <span class="keyword-other">web-gui</span> we need a data representation that could be intepreted by React (i.e. JavaScript).
+    The typical choice is to use <span class="keyword-other">JSON</span> (JavaScript Object Notation), since it's standard and express data with objects that are easily translatable from/to Java objects. Therefore, we're going to adopt this standard.
+  </p>
+
+  <h3>3.3 web-guis as separate microservices</h3>
+  <p>
+    In order to achieve the maximum level of decoupling, both the <span class="keyword-other">web-guis</span> that we're going to develop will be separate microservices.
+    This way, in the future it will be possible to change the gui or the core system without touching the other (as long as the new software component adopts the same APIs, eventually introducing an appropriate adapter if needed). 
+    Guis in particular are very subject to change over time, for various reasons, so the choice seems very appropriate.<br>
+    The two microservices will be <span class="keyword">cargoservicegui</span> and <span class="keyword">productservicegui</span>.
+  </p>
+
+  <blockquote>Question: yet another actor?</blockquote>
+  <p>
+    We extensively used actors and the qak infrastructure during the development of this project, each for the given reasons. 
+    This time we're choosing not to, since the <span class="keyword-other">web-guis</span> merely needs to menage one or two messages at worst and don't seem to have many possible states. 
+    Since they operate, in some extension, as FSM (Finite State Machine) who exchange messages and react to them, it could be argue that they are "coded actors"; however, they are so simple that the definition of pure "POJO" seems somewhat more appropriate.
+    Moreover, modeling them as (very simple) qak actors, thereby introducing the qak infrastructure's runtime environment, would introduce some unmotivated overhead.
+  </p>
+
+  <blockquote>Question: what happens when the system stops for a sonar sensor failure?</blockquote>
+  <p>
+    As established during <a href="../../sprint2/sprint2_ioport/userDocs/DeSimoni-Grano-LoBuglio_sprint2_v1.html">sprint2</a>, the core system halts when a sonar sensor failure is detected, therefore it seems appropriate that the relative web-gui will need to block the possibility of submitting new load requests, eventually notifying what's happening to the user.
+  </p>
+
+  <h2>4. Project</h2>
+  <p>
+    We naturally decided to split the work in two parts, following the structure of the guis:
+    <ul>
+      <li><a href="#part-1">Part 1</a>: Front-ends</li>      
+      <li><a href="#part-2">Part 2</a>: Back-ends</li>
+    </ul>
+  </p>
+  
+  <h3 id="part-1">4.1 Part 1: front-ends</h3>
+  <p>
+    As discussed in problem analysis, the development of the front-end has been also devided in two separate parts, one for the <span class="keyword">productservice</span>, the other for <span class="keyword">cargoservice</span>.
+  </p>
+
+  <h4>4.1.1 Form to interact with productservice</h4>
+  <p>In order to let the user submit his creation or deletion requests, two simple HTML form needs to be developed, <a href="../sprint3_productservicegui/src/main/resources/createProduct.html">one for creation</a>
+     and <a href="../sprint3_productservicegui/src/main/resources/deleteProduct.html">one for deletion</a> of products.
+    This project includes some <a href="../sprint3_productservicegui/src/main/resources/productservicejswebsocket.js">JavaScript code</a> that allows communications between the HTML pages and the <span class="keyword">productservice</span> microservice.
+  </p>
+  <div class="image-container" id="fig3">
+      <img width="90%" alt="Product creation form" title="Product creation form" src="./img/Create_form.png"> 
+      <div class="caption">Figure 3 – Product creation form</div>
+  </div>
+  <div class="image-container" id="fig4">
+      <img width="90%" alt="Product deletion form" title="Product deletion form" src="./img/Delete_form.png"> 
+      <div class="caption">Figure 4 – Product deletion form</div>
+  </div>
+
+  <h4>4.1.2 React page to interact with cargoservice and show hold's status</h4>
+  <p>As stated in problem analysis, the development of a React single page application is needed in order to show the hold's status and enable the user to submit his load requests, if any.<br>
+      The development of such page follows the principles of React; we have mainly three files:
+      <ul>
+        <li><a href="../sprint3_cargoservicegui_react/src/index.js">index.js</a>, which is a simple page that launch the application, loading his components</li>
+        <li><a href="../sprint3_cargoservicegui_react/src/HoldPage.js">HoldPage.js</a>, which is the React component representing the hold's status; it is <span class="keyword-other">stateful</span> and mainly consists of a table that reports the slots and the PIDs and weights associated with them, if any</li>
+        <li><a href="../sprint3_cargoservicegui_react/src/LoadForm.js">LoadForm.js</a>, which is the React component that allows the user to submit a load request; it is <span class="keyword-other">stateless</span> and mainly consists of a form</li>
+      </ul>
+      An example of this page is show in <a href="#fig5">figure 5</a>.<br>
+      The <a href="#part-2">back-end</a> of the application sends the hold's status by the means of a JSON object that is parsed and translated into the informations shown in the gui.
+  </p>
+  <div class="image-container" id="fig5">
+      <img width="90%" alt="Hold status page" title="Hold status page" src="./img/Cargo_page.png"> 
+      <div class="caption">Figure 5 – Hold status page</div>
+  </div>
+
+  <h3 id="part-2">4.2 Part 2: back-ends</h3>
+  <p>
+    In both cases, <span class="keyword">cargoservicegui</span> and <span class="keyword">productservicegui</span>, the back-end consist of a simple POJO that interacts via TCP with <span class="keyword">cargoservice</span> or <span class="keyword">productservice</span>, respectively, 
+    and via WebSocket with the appropriate front-end.<br>
+    In the case of the <span class="keyword">cargoservicegui</span> when a new WebSocket connection is established a getHoldStatus request is sent to <span class="keyword">holdManager</span>, so that, when the reply arrives, the hold's representation can be initialized at its current status.
+    Furthermore, when it receives a stop (and then a resume) event it needs to update every instances of the <span class="keyword-other">web-gui</span>, therefore it has a list of all opened sessions so that it can broadcast the event and enable/disable the possibility for the user of sending requests.
+  </p>
+  <div class="image-container" id="fig6">
+      <img width="90%" alt="WebSocketServers class diagram" title="WebSocketServers class diagram" src="./img/WebSocketServersClassDiagram.png"> 
+      <div class="caption">Figure 6 – WebSocketServers class diagram</div>
+  </div>
+
+  <h2>5. Final architecture of the system</h2>
+  <p>
+    As this is the final sprint of the project, we now report the final architecture of the system.<br>
+    N.B.: the web-guis software components are not actors and run outside of the qakruntime environment and we tried to show this in the following figure.
+  </p>
+  <div class="image-container" id="fig7">
+      <img width="90%" alt="Final architecture" title="Final architecture" src="./img/model3_1.png"> 
+      <div class="caption">Figure 7 – Final architecture</div>
+  </div>
+
+  <h2>6. Test plans</h2>
+  <p>
+    Every <span class="keyword-other">web-gui</span> that has been developed during this sprint has been extensively tested, alone and coordinated with the other microservices, i.e. <span class="keyword">productservice</span> and <span class="keyword">cargoservice</span>.<br>
+    Since this was the final sprint of the Maritime Cargo project, an overall and successful simulation of system operations has been carried out.
+  </p>
+
+  <h2>7. Conclusions</h2>
+  <p>
+    During this sprint we have implemented two new microservices, <span class="keyword">productservicegui</span> and <span class="keyword">cargoservicegui</span>, 
+    that act as <span class="keyword">web-guis</span> for the <span class="keyword">productservice</span> and <span class="keyword">cargoservice</span> microservices, respectively.
+    The possibility of multiple sessions of the same gui, has been addressed and an overall simulation has been carried out.<br>
+    This was the final sprint of the Maritime Cargo project, so it is now ready to been shown in its final form to the customer.
+  </p>
+
+  <h2>Developing Team</h2>
+  <div class="team">
+    <div class="member">
+      <img src="./img/profilePictures/clarissadesimoni.jpg" alt="Clarissa De Simoni">
+      <div class="member-name">Clarissa De Simoni</div>
+      <div class="member-role">0001139600</div>
+      <a href="mailto:clarissa.desimoni@studio.unibo.it">clarissa.desimoni@studio.unibo.it</a>
+    </div>
+    <div class="member">
+      <img src="./img/profilePictures/andreagrano.jpg" alt="Andrea Grano">
+      <div class="member-name">Andrea Grano</div>
+      <div class="member-role">0900087513</div>
+      <a href="mailto:andrea.grano@studio.unibo.it">andrea.grano@studio.unibo.it</a>
+    </div>
+    <div class="member">
+      <img src="./img/profilePictures/andrealobuglio.jpg" alt="Andrea Lo Buglio">
+      <div class="member-name">Andrea Lo Buglio</div>
+      <div class="member-role">0001193726</div>
+      <a href="mailto:andrea.lobuglio@studio.unibo.it">andrea.lobuglio@studio.unibo.it</a>
+    </div>
+  </div>
+  <script src="./script/index.js"></script>
+</body>
+</html>
+

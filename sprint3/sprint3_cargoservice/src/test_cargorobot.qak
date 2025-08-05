@@ -1,0 +1,334 @@
+System test_cargorobot
+
+// MESSAGES
+// cargorobot -> BasicRobot
+Request engage        : engage(OWNER, STEPTIME)	
+Reply   engagedone    : engagedone(ARG)    for engage
+Reply   engagerefused : engagerefused(ARG) for engage
+
+//Request doplan				:	doplan(Path, StepTime)
+//Reply doplandone    		: 	doplandone(V) for doplan
+//Reply doplanfailed  		: 	doplanfailed(V) for doplan
+
+Dispatch cmd				:	cmd(MOVE)
+
+Request	step				:	step(TIME)
+Reply	stepdone			:	stepdone(V) for step
+Reply	stepfailed			:	stepfailed(DURATION, CAUSE) for step
+
+// cargorobot -> cargorobot
+Dispatch goon				:	goon(V)
+
+// test -> cargorobot
+Dispatch go					:	go(Slot)
+
+
+// CONTEXTS
+Context ctxcargoservice	ip[host="localhost" port=8003]
+Context ctxbasicrobot	ip[host="127.0.0.1" port=8020]
+
+// ACTORS
+ExternalQActor basicrobot context ctxbasicrobot
+
+//QActor cargorobot context ctxcargoservice {
+//	import "main.java.planner.*"
+//	import "main.java.planner.HoldMap.*"
+//	
+//	[#
+//		val planner = PlannerForHold()
+//		val STEP = 160
+//	#]
+//	
+//	State init initial {
+//		println("$name: STARTING...") color green
+//		
+//		[#
+//			planner.initRobotState()
+//			HoldMapLoader.fromTextToBinFile("./HoldMap.txt");
+//			planner.loadMap("./HoldMap.bin")
+//		#]
+//		
+//		println("$name: engaging BasicRobot...") color green
+//		request basicrobot -m engage : engage(cargorobot, $STEP)
+//	}
+//	Transition t0
+//		whenReply engagedone -> engagedone
+//		whenReply engagerefused -> engagerefused
+//		
+//	State engagedone {
+//		println("$name: initialization complete") color green
+//	}
+//	Goto idle
+//		
+//	State engagerefused {
+//		println("$name: engage failed") color green
+//		printCurrentMessage color green
+//	}
+//	
+//	State idle {
+//		println("$name: idle at home...") color green
+//		
+//		delay 3000 //cargorobot waiting for a new container to be waiting at the ioport
+//	}
+//	Transition t0
+//		whenMsg go -> movetoioport
+//		
+//	State movetoioport {
+//		println("$name: moving to ioport...") color green
+//		
+//		[#
+//			val target = planner.getCellCoordsByType(CellType.IOPORT)
+//			val Path = planner.findPath(target[0], target[1])
+//			planner.doPath(Path)
+//		#]
+//		
+//		request basicrobot -m doplan : doplan($Path, $STEP)
+//	}
+//	Transition t1
+//		whenReply doplandone -> movetoslot
+//		whenReply doplanfailed -> pathfailure
+//		
+//	State movetoslot {
+//		println("$name: loading container...") color green
+//		delay 2000
+//		
+//		println("$name: moving to slot...") color green
+//		
+//		[#
+//			val target = planner.getCellCoordsByType(CellType.SLOT3)
+//			val Path = planner.findPath(target[0], target[1])
+//			planner.doPath(Path)
+//		#]
+//		
+//		request basicrobot -m doplan : doplan($Path, $STEP)		
+//	}
+//	Transition t2
+//		whenReply doplandone -> movebackhome
+//		whenReply doplanfailed -> pathfailure 
+//	
+//	State movebackhome {
+//		println("$name: leaving container...") color green
+//		delay 2000
+//		
+//		println("$name: moving back home...") color green
+//		
+//		[#
+//			val target = planner.getCellCoordsByType(CellType.HOME)
+//			val Path = planner.findPath(target[0], target[1])
+//			planner.doPath(Path)
+//		#]
+//		
+//		request basicrobot -m doplan : doplan($Path, $STEP)
+//	}
+//	Transition t3
+//		whenReply doplandone -> idle
+//		whenReply doplanfailed -> trapped
+//	
+//	State pathfailure {
+//		println("$name: path failure, trying to go back home") color green
+//		
+//		delay 700
+//	}
+//	Goto movebackhome
+//	
+//	State trapped {
+//		println("$name: help, I'm trapped!") color green
+//	}
+//}
+
+
+QActor cargorobot context ctxcargoservice {
+	import "main.java.planner.*"
+	import "main.java.planner.HoldMap.*"
+	
+	[#
+		val planner = PlannerForHold()
+		val STEP = 160
+		var Slot = 0
+		
+		var Path = ""
+		var CurrMove = ""
+		var NextTarget = CellType.IOPORT
+		var Trapped = false
+		var end = true
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color green
+		
+		[#
+			planner.initRobotState()
+			HoldMapLoader.fromTextToBinFile("./HoldMap.txt");
+			planner.loadMap("./HoldMap.bin")
+		#]
+		
+		println("$name: engaging BasicRobot...") color green
+		request basicrobot -m engage : engage(cargorobot, $STEP)
+	}
+	Transition t0
+		whenReply engagedone -> engagedone
+		whenReply engagerefused -> engagerefused
+		
+	State engagedone {
+		println("$name: initialization complete") color green
+	}
+	Goto idle
+		
+	State engagerefused {
+		println("$name: engage failed") color green
+		printCurrentMessage color green
+	}
+	
+	State idle {
+		println("$name: idle at home...") color green
+	}
+	Transition t0
+		whenMsg go -> evaluatenexttarget
+	
+	State evaluatenexttarget {
+		onMsg(go : go(Slot)) {
+			println("$name: moving to ioport...") color green
+						
+			[#
+				val target = planner.getCellCoordsByType(NextTarget)
+				Path = planner.findPath(target[0], target[1])
+					
+				Slot = payloadArg(0).toInt()
+				var code = (Slot + 64).toChar()
+				NextTarget = CellType.fromCode("" + code)
+			#]
+		} else {
+			println("$name: container operation...") color green
+			delay 2000
+			
+			[# 
+				if(NextTarget != CellType.IOPORT) {
+					val target = planner.getCellCoordsByType(NextTarget)
+					Path = planner.findPath(target[0], target[1])
+					
+					if(NextTarget == CellType.HOME) {
+						NextTarget = CellType.IOPORT
+					} else {
+						NextTarget = CellType.HOME
+					}	
+				} else {
+					Path = "end"
+				}
+			#]
+		}	
+	}
+	Goto pathsuccess if [# Path == "end" #] else evaluatemove
+	
+	State evaluatemove {
+		if [# Path.length > 0 #] {
+			[#
+				CurrMove = Path.substring(0, 1)
+				Path = Path.substring(1, Path.length)
+			#]
+		}
+	}
+	Goto evaluatenexttarget if [# Path.length == 0 #] else domove
+	
+	State domove {
+		[# planner.doPath(CurrMove) #]
+		
+		if [# CurrMove == "w" #] {
+			request basicrobot -m step : step($STEP)
+		} else {
+			forward basicrobot -m cmd : cmd($CurrMove)
+			
+			delay 170
+			autodispatch goon : goon(1)
+		}
+	}
+	Transition t1
+		whenReply stepdone -> evaluatemove
+		whenReply stepfailed -> pathfailure
+		whenMsg goon -> evaluatemove
+	
+	State pathsuccess {
+		println("$name: home sweet home") color green
+	}
+	Goto idle
+	
+	State pathfailure {
+		println("$name: path failure, trying to go back home") color green
+		
+		delay 700
+		
+		if [# NextTarget != CellType.HOME #] {
+			[# NextTarget = CellType.HOME #]
+		} else {
+			[# Trapped = true #]
+		}
+	}
+	Goto evaluatenexttarget if [# !Trapped #] else trapped
+	
+	State trapped {
+		println("$name: help, I'm trapped!") color green
+	}
+}
+
+QActor test context ctxcargoservice {
+	State init initial {
+		println("$name: STARTING...") color red
+		
+		delay 5000
+	}
+	Goto go
+	
+	State go {
+		println("$name: now I'll send a message to cargorobot and he has to go") color red
+		
+		forward cargorobot -m go : go(1)
+	}
+	Goto done1
+	
+	State done1 {
+		println("$name: my work here is done, see ya") color red
+		
+		delay 25000
+	}
+	Goto go2
+	
+	State go2 {
+		println("$name: now I'll send a message to cargorobot and he has to go") color red
+		
+		forward cargorobot -m go : go(2)
+	}
+	Goto done2
+	
+	State done2 {
+		println("$name: my work here is done, see ya") color red
+		
+		delay 25000
+	}
+	Goto go3
+	
+	State go3 {
+		println("$name: now I'll send a message to cargorobot and he has to go") color red
+		
+		forward cargorobot -m go : go(3)
+	}
+	Goto done3
+	
+	State done3 {
+		println("$name: my work here is done, see ya") color red
+		
+		delay 25000
+	}
+	Goto go4
+	
+	State go4 {
+		println("$name: now I'll send a message to cargorobot and he has to go") color red
+		
+		forward cargorobot -m go : go(4)
+	}
+	Goto done4
+	
+	State done4 {
+		println("$name: my work here is done, see ya") color red
+		
+		delay 25000
+	}
+}

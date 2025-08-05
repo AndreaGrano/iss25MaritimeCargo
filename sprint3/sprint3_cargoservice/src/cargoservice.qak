@@ -1,0 +1,534 @@
+System iss25maritimecargo_sprint3_cargoservice
+
+// MESSAGES
+// cargoservice -> dbwrapper
+Request	getProductWeight	:	getProductWeight(PID)
+Reply	productWeight		:	productWeight(Weight) for getProductWeight
+
+// cargoservice -> holdmanager
+Request getFreeSlot			:	getFreeSlot(V)
+Reply	freeSlot			:	freeSlot(FreeSlot) for getFreeSlot
+
+Request getLoadedWeight		:	getLoadedWeight(V) // delegated to dbwrapper
+Reply	loadedWeight		:	loadedWeight(Weight) for getLoadedWeight
+
+Dispatch updateHold			:	updateHold(Slot, PID) // delegated to dbwrapper
+
+// client -> cargoservice
+Request	loadProduct			:	loadProduct(PID)
+Reply	loadAccepted		:	loadAccepted(SLOT, PID, WEIGHT) for loadProduct
+Reply	loadRejected		:	loadRejected(Reason) for loadProduct
+
+// cargoservice -> cargoservice
+Dispatch goToWait			:	goToWait(V)
+
+// cargorobot -> BasicRobot
+Request engage        : engage(OWNER, STEPTIME)	
+Reply   engagedone    : engagedone(ARG)    for engage
+Reply   engagerefused : engagerefused(ARG) for engage
+
+Dispatch cmd				:	cmd(MOVE)
+
+Request	step				:	step(TIME)
+Reply	stepdone			:	stepdone(V) for step
+Reply	stepfailed			:	stepfailed(DURATION, CAUSE) for step
+
+// cargorobot -> cargorobot
+Dispatch goon				:	goon(V)
+
+// containermanager -> cargoservice
+Request	containerWaiting	:	containerWaiting(V)
+Reply	containerLoaded		:	containerLoaded(V) for containerWaiting
+
+// cargoservice -> cargorobot
+Request doDelivery			:	doDelivery(Slot)
+Reply	deliveryDone		:	deliveryDone(V) for doDelivery
+
+// interrupts from alarmmanager
+Event 	stop				:	stop(V)
+Event	resume				:	resume(V)
+
+// cargoservicegui -> holdmanager
+Request getHoldStatus		:	getHoldStatus(V) // delegated to dbwrapper
+Reply	holdStatus			:	holdStatus(P1, W1, P2, W2, P3, W3, P4, W4) for getHoldStatus
+
+// dbwrapper -> cargoservicegui
+Event	holdChanged			:	holdChanged(Slot, PID, Weight)
+
+// CONTEXTS
+Context ctxcargoservice	ip[host="localhost" port=8003]
+Context ctxcargoservicegui ip[host="127.0.0.1" port=8002]
+Context ctxbasicrobot	ip[host="127.0.0.1" port=8020]
+
+
+// ACTORS
+ExternalQActor basicrobot context ctxbasicrobot
+
+// actors operating on the hold
+QActor dbwrapper context ctxcargoservice {
+	import "main.java.dbdriver.*"
+	
+	 [#
+        val wrapper = Wrapper()
+        lateinit var CurrProduct : Product
+    #]
+
+    State init initial {
+        println("$name: STARTING...") color yellow
+        println("$name: initialization complete") color yellow
+    }
+    Goto wait
+
+    State wait {
+        println("$name: waiting...") color yellow
+    }
+    Transition t0
+    	whenRequest getProductWeight -> getproductweight
+    	whenRequest getFreeSlot -> getfreeslot
+    	whenRequest getLoadedWeight -> getloadedweight
+    	whenMsg updateHold -> updatehold
+    	whenRequest getHoldStatus -> getholdstatus
+    	
+    State getproductweight {
+    	printCurrentMessage color yellow
+    	
+    	 onMsg(getProductWeight : getProductWeight(PID)) {
+            [#
+                val PID = payloadArg(0).toInt()
+                CurrProduct = wrapper.getProduct(PID)
+            #]
+            
+            if [# !CurrProduct.getName().equals("NOT_FOUND") #] {
+				[# 
+				  val ProdWeight = CurrProduct.getWeight()
+				#]
+				replyTo getProductWeight with productWeight : productWeight($ProdWeight)
+            } else {
+                replyTo getProductWeight with productWeight : productWeight(0)
+            }
+        }
+    }
+    Goto wait
+    
+    State getfreeslot {
+    	printCurrentMessage color yellow
+    	
+    	onMsg(getFreeSlot : getFreeSlot(V)) {
+            [#
+                val FreeSlot = wrapper.getFirstAvailableSlot()
+            #]
+
+            replyTo getFreeSlot with freeSlot : freeSlot($FreeSlot)
+        }
+    }
+    Goto wait
+    
+    State getloadedweight {
+    	printCurrentMessage color yellow
+    	
+    	onMsg(getLoadedWeight : getLoadedWeight(V)) {
+	    	[# 
+	    		var slotsList = wrapper.getAllSlots()
+	    		
+	    		var LoadedWeight = 0.0
+	    		for(slot in slotsList) {
+	    			var PID = slot.getPID()
+	    			if(PID > 0) {
+		    			var product = wrapper.getProduct(PID)
+		    			LoadedWeight += product.getWeight()
+		    		}
+	    		}
+	    	#]
+	    	
+	    	replyTo getLoadedWeight with loadedWeight : loadedWeight($LoadedWeight)
+    	}
+    }
+    Goto wait
+    
+    State updatehold {
+    	printCurrentMessage color yellow
+    	
+		 onMsg(updateHold : updateHold(Slot, PID)) {
+	        [#
+	            val Slot = payloadArg(0).toInt()
+	            val PID = payloadArg(1).toInt()
+	            val res = wrapper.loadProduct(PID)
+	            
+	            var product = wrapper.getProduct(PID)
+	            var Weight = product.getWeight()
+	        #]
+	        
+			emit holdChanged : holdChanged($Slot, $PID, $Weight)
+	    }
+    }
+    Goto wait
+    
+    State getholdstatus {
+    	printCurrentMessage color yellow
+    	
+    	[#
+//    		var PIDs = arrayOf<Int>(0, 0, 0, 0)
+//    		var Weights = arrayOf<Double>(0.0, 0.0, 0.0, 0.0)
+//    		
+//    		for (i in 0..3) {
+//    			var Slot = wrapper.getSlot(i + 1)
+//    			
+//    			var PID = Slot.getPID()
+//    			if(PID > 0) {
+//    				PIDs.set(i, PID)
+//    				
+//    				var Product = wrapper.getProduct(PID)
+//    				var Weight = Product.getWeight()
+//    				Weights.set(i, Weight)
+//    			}
+//    		}
+
+			var P1 = 0
+			var W1 = 0.0
+			var Slot1 = wrapper.getSlot(1)
+			var PID1 = Slot1.getPID()
+			if(PID1 > 0) {
+				P1 = PID1
+				
+				var Product = wrapper.getProduct(PID1)
+				W1 = Product.getWeight()
+			}
+			
+			var P2 = 0
+			var W2 = 0.0
+			var Slot2 = wrapper.getSlot(2)
+			var PID2 = Slot2.getPID()
+			if(PID2 > 0) {
+				P2 = PID2
+				
+				var Product = wrapper.getProduct(PID2)
+				W2 = Product.getWeight()
+			}
+			
+			var P3 = 0
+			var W3 = 0.0
+			var Slot3 = wrapper.getSlot(3)
+			var PID3 = Slot3.getPID()
+			if(PID3 > 0) {
+				P3 = PID3
+				
+				var Product = wrapper.getProduct(PID3)
+				W3 = Product.getWeight()
+			}
+			
+			var P4 = 0
+			var W4 = 0.0
+			var Slot4 = wrapper.getSlot(4)
+			var PID4 = Slot4.getPID()
+			if(PID4 > 0) {
+				P4 = PID4
+				
+				var Product = wrapper.getProduct(PID4)
+				W4 = Product.getWeight()
+			}
+    	#]
+    	
+    	replyTo getHoldStatus with holdStatus : holdStatus($P1, $W1, $P2, $W2, $P3, $W3, $P4, $W4)
+    }
+    Goto wait
+}
+
+QActor cargoservice context ctxcargoservice {
+	[#
+			//val MAX_LOAD = System.getenv("MAX_LOAD").toDouble()
+			//val SLOTS = System.getenv("SLOTS").toInt()
+			
+			val MAX_LOAD = 80.0
+			val SLOTS = 4
+			
+			var PID = -1
+			var Slot = -1
+			var Loadedweight = 0.0
+			var assignedSlots = ArrayList<Int>();
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color blue
+		
+		println("$name: initialization complete") color blue
+	}
+	Goto wait
+	
+	State wait {		
+		println("$name: waiting for requests...") color blue
+	}
+	Transition t0
+		whenRequest loadProduct ->	handle_loadproduct
+		whenEvent stop -> halt
+		whenRequest containerWaiting -> containerwaiting
+		whenReply deliveryDone -> deliverydone
+		
+	State handle_loadproduct {
+		printCurrentMessage color blue
+		
+		onMsg(loadProduct : loadProduct(PID)) {
+			[#
+				PID = payloadArg(0).toInt()
+			#]
+			
+			request holdmanager -m getFreeSlot : getFreeSlot(1)
+		}
+	}
+	Transition t1
+		whenReply	freeSlot -> evaluate_slot
+		
+	State evaluate_slot {
+		printCurrentMessage color blue
+		
+		onMsg(freeSlot : freeSlot(Slot)) {
+			[# Slot = payloadArg(0).toInt() #]
+			
+			if [# Slot > 0 #] {
+				request holdmanager -m getLoadedWeight : getLoadedWeight(1)
+			} else {
+				println("$name: load rejected, no more free slots") color blue
+				
+				replyTo loadProduct with loadRejected : loadRejected(NO_AVAILABLE_SLOT)
+				
+				autodispatch goToWait : goToWait(1)
+			}
+		}
+	}
+	Transition t2
+		whenReply loadedWeight -> update_loaded_weight
+		whenMsg goToWait -> wait
+		
+	State update_loaded_weight {
+		printCurrentMessage color blue
+		
+		onMsg(loadedWeight : loadedWeight(Weight)) {
+			[# Loadedweight = payloadArg(0).toDouble() #]
+
+			request dbwrapper -m getProductWeight : getProductWeight($PID)
+			
+		}
+	}
+	Transition t3
+	whenReply productWeight -> evaluate_weight
+	
+	State evaluate_weight {
+		printCurrentMessage color blue
+		
+		onMsg(productWeight : productWeight(Weight)) {
+			[# var Productweight = payloadArg(0).toDouble() #]
+			if [# Productweight > 0 #] {
+				if [# (Loadedweight + Productweight) <= MAX_LOAD #] {
+						println("$name: load accepted") color blue
+						
+						forward holdmanager -m updateHold : updateHold($Slot, $PID)
+						
+						[# assignedSlots.add(Slot) #]
+						
+						replyTo loadProduct with loadAccepted : loadAccepted($Slot, $PID, $Productweight)
+					} else {
+						println("$name: load rejected, too heavy") color blue
+						
+						replyTo loadProduct with loadRejected : loadRejected(TOO_HEAVY)
+					}
+			} else {
+				replyTo loadProduct with loadRejected : loadRejected(DOES_NOT_EXIST)
+			}	
+		}
+	}
+	Goto wait
+	
+	State containerwaiting {
+		if [# assignedSlots.size > 0 #] {
+			printCurrentMessage color blue
+			
+			onMsg(containerWaiting : containerWaiting(V)) {
+				[#
+					var Slot =  assignedSlots.get(0)
+					assignedSlots.removeAt(0)
+				#]
+				
+				request cargorobot -m doDelivery : doDelivery($Slot)
+			}
+		} else {
+			replyTo containerWaiting with containerLoaded : containerLoaded(1)
+		}
+	}
+	Goto wait
+	
+	State deliverydone {
+		printCurrentMessage color blue
+		
+		replyTo containerWaiting with containerLoaded : containerLoaded(1)
+	}
+	Goto wait
+	
+	State halt {
+		println("$name: STOPPED") color blue
+	}
+	Transition t4
+		whenEvent resume -> wait
+}
+
+QActor holdmanager context ctxcargoservice {
+	import "main.java.dbdriver.*"
+	import "java.io.*"
+	
+	State init initial {
+		println("$name: STARTING...") color yellow
+		
+		delegate updateHold to dbwrapper
+		delegate getLoadedWeight to dbwrapper
+		delegate getFreeSlot to dbwrapper
+		delegate getHoldStatus to dbwrapper
+		
+		println("$name: initialization complete") color yellow
+	}
+}
+
+// actors operating on the cargorobot
+ QActor cargorobot context ctxcargoservice {
+	import "main.java.planner.*"
+	import "main.java.planner.HoldMap.*"
+	
+	[#
+		val planner = PlannerForHold()
+		val STEP = 160
+		var Slot = 0
+		
+		var Path = ""
+		var CurrMove = ""
+		var NextTarget = CellType.IOPORT
+		var Trapped = false
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color green
+		
+		[#
+			planner.initRobotState()
+			HoldMapLoader.fromTextToBinFile("./HoldMap.txt");
+			planner.loadMap("./HoldMap.bin")
+		#]
+		
+		println("$name: engaging BasicRobot...") color green
+		request basicrobot -m engage : engage(cargorobot, $STEP)
+	}
+	Transition t0
+		whenReply engagedone -> engagedone
+		whenReply engagerefused -> engagerefused
+		
+	State engagedone {
+		println("$name: initialization complete") color green
+	}
+	Goto idle
+		
+	State engagerefused {
+		println("$name: engage failed") color green
+		printCurrentMessage color green
+	}
+	
+	State idle {
+		println("$name: idle at home...") color green
+	}
+	Transition t0
+		whenRequest doDelivery -> evaluatenexttarget
+		whenEvent stop -> halt
+	
+	State evaluatenexttarget {		
+		onMsg(doDelivery : doDelivery(Slot)) {
+			println("$name: moving to ioport...") color green
+						
+			[#
+				val target = planner.getCellCoordsByType(NextTarget)
+				Path = planner.findPath(target[0], target[1])
+					
+				Slot = payloadArg(0).toInt()
+				var code = (Slot + 64).toChar()
+				NextTarget = CellType.fromCode("" + code)
+			#]
+		} else {
+			println("$name: container operation...") color green
+			delay 2000
+			
+			[# 
+				if(NextTarget != CellType.IOPORT) {
+					val target = planner.getCellCoordsByType(NextTarget)
+					Path = planner.findPath(target[0], target[1])
+					
+					if(NextTarget == CellType.HOME) {
+						NextTarget = CellType.IOPORT
+					} else {
+						NextTarget = CellType.HOME
+					}	
+
+				} else {
+					Path = "end"
+				}
+			#]
+		}	
+	}
+	Goto pathsuccess if [# Path == "end" && NextTarget == CellType.IOPORT #] else evaluatemove
+	
+	State evaluatemove {
+		if [# Path.length > 0 #] {
+			[#
+				CurrMove = Path.substring(0, 1)
+				Path = Path.substring(1, Path.length)
+			#]
+		}
+	}
+	Goto evaluatenexttarget if [# Path.length == 0 #] else domove
+	
+	State domove {
+		[# planner.doPath(CurrMove) #]
+		
+		if [# CurrMove == "w" #] {
+			request basicrobot -m step : step($STEP)
+		} else {
+			forward basicrobot -m cmd : cmd($CurrMove)
+			
+			delay 160
+			autodispatch goon : goon(1)
+		}
+	}
+	Transition t1
+		whenEvent stop -> halt
+		whenReply stepdone -> evaluatemove
+		whenReply stepfailed -> pathfailure
+		whenMsg goon -> evaluatemove
+	
+	State pathsuccess {
+		println("$name: home sweet home") color green
+		
+		replyTo doDelivery with deliveryDone : deliveryDone(1)
+	}
+	Goto idle
+	
+	State pathfailure {
+		println("$name: path failure, trying to go back home") color green
+		
+		delay 700
+		
+		if [# NextTarget != CellType.HOME #] {
+			[# NextTarget = CellType.HOME #]
+		} else {
+			[# Trapped = true #]
+		}
+	}
+	Goto evaluatenexttarget if [# !Trapped #] else trapped
+	
+	State trapped {
+		println("$name: help, I'm trapped!") color green
+	}
+	
+	State halt {
+		println("$name: STOPPED") color green
+	}
+	Transition t2
+		whenEvent resume -> resume
+		
+	State resume {
+		println("$name: RESUME") color green
+	}
+	Goto idle if [# Path == "end" && NextTarget == CellType.IOPORT #] else evaluatemove
+}

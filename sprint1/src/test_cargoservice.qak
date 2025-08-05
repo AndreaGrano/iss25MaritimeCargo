@@ -1,0 +1,135 @@
+System test_cargoservice
+
+// MESSAGES
+// cargoservice -> dbwrapper
+Request	getProduct			:	getProduct(PID)
+Reply	productName			:	productName(Name) for getProduct
+
+Request getLoadedweight		:	getLoadedweight(V)
+Reply	loadedweight		:	loadweight(weight) for getLoadedweight
+
+Dispatch updateLoadedweight	:	updateLoadedweight(Weight)
+
+// cargoservice -> holdmanager
+Request getFreeSlot			:	getFreeSlot(V)
+Reply	freeSlot			:	freeSlot(Slot) for getFreeSlot
+
+Dispatch updateHold			:	updateHold(Slot, PID)
+
+// client -> cargoservice
+Request	loadProduct			:	loadProduct(PID, Weight)
+Reply	loadAccepted		:	loadAccepted(V) for loadProduct
+Reply	loadRejected		:	loadRejected(Reason) for loadProduct
+
+// cargoservice -> cargoservice
+Dispatch goToWait			:	goToWait(V)
+
+
+// CONTEXTS
+Context ctxcargoservice	ip[host="localhost" port=8001]
+
+
+// ACTORS
+QActor cargoservice context ctxcargoservice {
+	[#
+			val MAX_LOAD = System.getenv("MAX_LOAD")
+			val SLOTS = System.getenv("SLOTS")
+			
+			var PID = -1
+			var Productweight = 0.0F
+			var Slot = -1
+			var Loadedweight = 0.0F
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color blue
+		
+		println("$name: initialization complete") color blue
+	}
+	Goto wait
+	
+	State wait {		
+		println("$name: waiting for requests...") color blue
+	}
+	Transition t0
+		whenRequest loadProduct ->	handle_loadproduct
+		
+	State handle_loadproduct {
+		printCurrentMessage color blue
+		
+		onMsg(loadProduct : loadProduct(PID, weight)) {
+			[#
+				PID = payloadArg(0).toInt()
+				Productweight = payloadArg(1).toDouble()
+			#]
+			
+			request holdmanager -m getFreeSlot : getFreeSlot(1)
+		}
+	}
+	Transition t1
+		whenReply	freeSlot -> evaluate_slot
+		
+	State evaluate_slot {
+		onMsg(freeSlot : freeSlot(Slot)) {
+			[# Slot = payloadArg(0) #]
+			
+			if [# Slot > 0 #] {
+				request dbwrapper -m getLoadedweight : getLoadedweight(1)
+			} else {
+				println("$name: load rejected, no more free slots") color blue
+				
+				replyTo loadProduct with loadRejected : loadRejected(1)
+				
+				autodispatch goToWait : goToWait(1)
+			}
+		}
+	}
+	Transition t2
+		whenReply loadedweight -> evaluate_weight
+		whenMsg goToWait -> wait
+		
+	State evaluate_weight {
+		onMsg(loadedweight : loadedweight(Weight)) {
+			[# Loadedweight = payloadArg(0) #]
+			
+			if [# (Loadedweight + Productweight) < MAX_LOAD #] {
+				println("$name: load accepted") color blue
+				
+				forward holdmanager -m updateHold : updateHold($Slot, $PID)
+				forward dbwrapper -m updateLoadedweight : updateLoadedweight($Productweight)
+				
+				replyTo loadProduct with loadAccepted : loadAccepted(1)
+			} else {
+				println("$name: load rejected, too heavy") color blue
+				
+				replyTo loadProduct with loadRejected : loadRejected(1)
+			}
+		}
+	}
+	Goto wait
+}
+
+QActor dbwrapper context ctxcargoservice {
+	State init initial {
+		println("$name: STARTING...") color yellow
+		
+		//INIT OP
+		
+		println("$name: initialization complete") color yellow
+	}
+	Goto work
+	
+	State work {
+		//TODO
+	}
+}
+
+QActor holdmanager context ctxcargoservice {
+	State init initial {
+		println("$name: STARTING...") color yellow
+		
+		//INIT OP
+		
+		println("$name: initialization complete") color yellow
+	}
+}

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="./style.css">
+        <script type="text/javascript" src="./productservicejswebsocket.js"></script>
+        <title>Form to delete a Product</title>
+    </head>
+    <body>
+        <h1>Form to delete a Product</h1>
+        <div class="form-fields form-fields">
+            <div class="form-field">
+                <label for="pid-field">PID: </label><input id="pid-field" type='number' min="1" />
+            </div>
+            <div class="button-field">
+                <input type="button" value="Delete product" onclick="sendDeleteProduct()" />
+            </div>
+            <div class="result">
+                <p id="result-p"></p>
+            </div>
+        </div>
+    </body>
+</html>

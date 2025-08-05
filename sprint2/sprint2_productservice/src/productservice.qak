@@ -1,0 +1,93 @@
+System iss25maritimecargo_sprint2_productservice
+
+// MESSAGES
+// client -> productservice
+Request createProduct 		:	createProduct(Name, Weight)
+Reply	createdProduct		:	createdProduct(PID) for createProduct
+
+Request	deleteProduct		:	deleteProduct(PID)
+Reply	deletedProduct		:	deletedProduct(Name, Weight) for deleteProduct 
+
+
+// CONTEXTS
+Context ctxproductservice	ip[host="localhost" port=8001]
+
+
+// ACTORS
+QActor dbwrapper context ctxproductservice {
+	import "main.java.dbdriver.*"
+	
+	 [#
+        val wrapper = Wrapper()
+        lateinit var CurrProduct : Product
+    #]
+
+    State init initial {
+        println("$name: STARTING...") color yellow
+        println("$name: initialization complete") color yellow
+    }
+    Goto wait
+
+    State wait {
+        println("$name: waiting...") color yellow
+    }
+    Transition t0
+    	whenRequest createProduct -> createproduct
+    	whenRequest deleteProduct -> deleteproduct
+    
+    State createproduct {
+    	printCurrentMessage color yellow
+    	
+    	onMsg(createProduct : createProduct(Name, Weight)) {
+	        [#
+	        	var Name = payloadArg(0)
+	        	var Weight = payloadArg(1).toDouble()
+	            var product = wrapper.createProduct(Name, Weight)
+	        #]
+	        if [# product != null #] {
+	        	[# var PID = product.getPID() #]
+	        	replyTo createProduct with createdProduct : createdProduct($PID)	        
+	        } else {
+	        	[# var PID = -1 #]
+	        	replyTo createProduct with createdProduct : createdProduct($PID)
+	        }
+	   }
+    }
+    Goto wait
+    
+    State deleteproduct {
+    	printCurrentMessage color yellow
+    	
+    	onMsg(deleteProduct : deleteProduct(PID)) {
+	        [#
+	        	var PID = payloadArg(0)
+	            var product = wrapper.deleteProduct(PID)
+	        #]
+	        if [# product != null #] {
+	        	[# 	var Name = product.getName()
+	        		var	Weight = product.getWeight()
+	        	#]
+	        	replyTo deleteProduct with deletedProduct : deletedProduct($Name, $Weight)	        
+	        } else {
+	        	[# 	var Name = "NOT_FOUND"
+	        		var	Weight = 0.0
+	        	#]
+	        	replyTo deleteProduct with deletedProduct : deletedProduct($Name, $Weight)
+	        }
+	    }
+    }
+    Goto wait
+}
+
+QActor productservice context ctxproductservice {
+	[# var CurrProdName = "" #]
+	
+	State init initial {
+		println("$name: STARTING...") color cyan
+		
+		delegate createProduct to dbwrapper
+		delegate deleteProduct to dbwrapper
+		
+		println("$name: initialization complete") color cyan
+	}
+}

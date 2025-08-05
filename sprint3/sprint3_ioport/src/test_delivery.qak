@@ -1,0 +1,99 @@
+System test_delivery
+
+// MESSAGES
+// containermanager -> cargoservice
+Request	containerWaiting	:	containerWaiting(V)
+Reply	containerLoaded		:	containerLoaded(V) for containerWaiting
+
+// sonarwrapper -> containermanager
+Event	distance	:	distance(D)
+
+
+// CONTEXTS
+Context ctxioport ip[host="localhost" port=8007]
+Context ctxcargoservice ip[host="127.0.0.1" port=8003]
+
+// ACTORS
+ExternalQActor cargoservice context ctxcargoservice
+
+QActor sonarwrapper context ctxioport {
+	import "java.io.*"
+	[#
+		lateinit var p : Process
+		lateinit var reader : BufferedReader 
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color magenta
+		
+		[#
+			try {
+				p = Runtime.getRuntime().exec("python sonar.py")
+				reader = BufferedReader(InputStreamReader(p.getInputStream()))
+			} catch(e : Exception) {
+				println("sonarwrapper sonarStart ERROR: $e")
+			}
+		#]
+		
+		println("$name: initialization complete") color magenta
+	}
+	Goto sendsonardata
+	
+	State sendsonardata {
+		[#
+			try {
+				var V = reader.readLine()
+				if(V != null) {
+					val payload = "distance( ${V} )"
+					val event = MsgUtil.buildEvent("sonardevice", "sonardata", payload)
+					
+					emitLocalStreamEvent(event)
+				}
+			} catch(e : Exception) {
+				println("sonardevice sendSonarData ERROR: $e")
+			}
+		#]
+		
+		delay 1000 // new data every second
+	}
+	Goto sendsonardata
+}
+
+QActor containermanager context ctxioport {
+	[#
+		val DFREE = 10
+		var containerCount = 0
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color magenta
+		
+		subscribeTo sonarwrapper for distance
+		
+		println("$name: initialization complete") color magenta
+	}
+	Goto wait
+	
+	State wait {
+		println("$name: waiting for distances...") color magenta
+	}
+	Transition t0
+		whenEvent distance -> evaluatedistance
+		
+	State evaluatedistance {
+		if [# containerCount < 3 #] {
+			if [# (V > 0) && (V < DFREE/2) #] {
+				[# containerCount += 1 #]
+			} else {
+				println("$name: new container waiting!") color magenta
+				
+				request cargoservice -m containerWaiting : containerWaiting(V)
+				
+				[# containerCount = 0 #]
+			}
+		} 
+	}
+	Transition t1
+		whenReply containerLoaded -> wait
+}
+

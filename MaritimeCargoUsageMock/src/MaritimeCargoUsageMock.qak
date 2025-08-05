@@ -1,0 +1,105 @@
+System maritimecargousagemock
+
+// MESSAGES
+// usagemock -> cargoservice
+Request	loadProduct			:	loadProduct(PID)
+Reply	loadAccepted		:	loadAccepted(SLOT, PID, WEIGHT) for loadProduct
+Reply	loadRejected		:	loadRejected(Reason) for loadProduct
+
+Request	containerWaiting	:	containerWaiting(V)
+Reply	containerLoaded		:	containerLoaded(V) for containerWaiting
+
+// events in order to emulate a sonar failure
+Event 	stop				:	stop(V)
+Event	resume				:	resume(V)
+
+
+// CONTEXTS
+Context ctxusagemock ip[host="localhost" port=8120]
+Context ctxcargoservice ip[host="127.0.0.1" port=8003]
+Context ctxioport ip[host="192.168.0.12" port=8007]
+
+
+// ACTORS
+ExternalQActor cargoservice context ctxcargoservice
+
+QActor usagemock context ctxusagemock {
+	State init initial {
+		println("$name: STARTING...") color magenta
+		
+		println("$name: Hi! I'm going to simulate a load cycle in which something unfortunate is going to happen...") color magenta
+		
+		delay 5000
+	}
+	Goto sendwrongone
+	
+	State sendwrongone {
+		println("$name: ok, let's do this!") color magenta
+		println("$name: now I'm sending a load requests for product that doesn't exist (PID: 1)") color magenta
+		
+		request cargoservice -m loadProduct : loadProduct(1)
+	}
+	Transition t0
+		whenReply loadRejected -> firstrefused
+		whenReply loadAccepted -> ohno
+		
+	State firstrefused {
+		printCurrentMessage color magenta
+		
+		println("$name: as expected, this first load request was refused!") color magenta
+		
+		delay 5000
+	}
+	Goto sendgoodone
+	
+	State sendgoodone {
+		println("$name: now I'm sending a load request for a Baccapesca (PID: 1752625846)") color magenta
+		println("$name: they are sweet indeed") color magenta
+		
+		request cargoservice -m loadProduct : loadProduct(1752625846)
+	}
+	Transition t1
+		whenReply loadAccepted -> sendcontainerwaiting
+		whenReply loadRejected -> ohno
+		
+	State sendcontainerwaiting {
+		println("$name: now I'm sending a containerWaiting") color magenta
+		
+		request cargoservice -m containerWaiting : containerWaiting(1)
+		
+		delay 10000
+	}
+	Goto sendstop
+	
+	State sendstop {
+		println("$name: plot twist, I'm emitting a STOP event!") color magenta
+		
+		emit stop : stop(1)
+		
+		delay 5000
+	}
+	Goto sendresume
+	
+	State sendresume {
+		println("$name: everything should have been stopped in the past 5 seconds") color magenta
+		println("$name: now I'm emitting a RESUME event") color magenta
+		
+		emit resume : resume(1)
+	}
+	Transition t2
+		whenReply containerLoaded -> happyending
+		
+	State happyending {
+		printCurrentMessage color magenta
+		
+		println("$name: the container has been loaded! Remember to check if the robot is back home!") color magenta
+		
+		println("$name: my job here has been done, it was a pleasure, see ya!") color magenta
+	}
+	
+	State ohno {
+		printCurrentMessage color magenta
+		
+		println("$name: something bad happen indeed :(") color magenta
+	}
+}

@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ISS Final Project - Maritime Cargo</title>
+  <link rel="stylesheet" href="./style/style.css">
+</head>
+<body>
+  <h1>ISS Final Project - Maritime Cargo</h1>
+  <a href="https://github.com/anatali/issLab2025/blob/main/iss25Material/docs/_build/html/TemaFinale25.html">Final exam theme a.a. 2024/2025</a>
+  <hr>
+  <div id="toc">
+    <h2>Index</h2>
+    <ul id="toc-list"></ul>
+  </div>
+  <h2>1. Introduction</h2>
+  <p> 
+    A Maritime Cargo shipping company intends to automate the operations of load of 
+    freight in the ship’s cargo hold. To this end, the company plans to employ a 
+    Differential Drive Robot for the loading of goods in the ship's hold.
+  </p>
+
+  <h3>1.1 Our motto</h3>
+  <p>
+    <blockquote>There is no code without a project, 
+    there is no project without <b><u>problem analysis</u></b>, 
+    there is no problem without requirements.</blockquote>
+  </p>
+
+  <h3>1.2 Model architecture from sprint0</h3>
+  <div class="image-container">
+    <img width="90%" alt="logicalArchitecture" title="logicalArchitecture" src="../../sprint0/userDocs/img/logicalArchitecture.png">  
+    <div class="caption">Figure 0 – Model architecture</div>
+  </div>
+
+  <h3>1.3 Further clarifications from the customer</h3>
+  <p>
+    After the conversation with the customer after sprint0, the two open issues have been clarified:
+    <ul>
+      <li>There is one more entity in the system, a <span class="keyword">client</span>, that gives input for product creation, deletion and load</li>
+      <li>When the system is stopped, new load requests must be queued; the system failure is supposed to be temporary</li>
+    </ul>
+
+    Furthermore, the customer has clarified that we can suppose that the order in which containers wait at the ioport is the same as that of load requests; those requests can be sent in any order and are indipendent to each other.
+  </p>
+
+  <h3>1.4 Aims of sprint1</h3>
+  <p>
+    The aims of the current sprint are:
+    <ul>
+      <li>Drafting of a problem analysis</li>
+      <li>Design and implementation of the core business model</li>
+      <li>Testing of the implemented model</li>
+    </ul>
+  </p>
+
+  <h2>2. Requirements formalization</h2>
+  <p>Within this sprint, we will be focusing on the requirements <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf1">RF1</a>, <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf2">RF2</a>, 
+    <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf3">RF3</a>, <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf4">RF4</a>,
+    <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf7">RF7</a>, <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf8">RF8</a>,
+    <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf9">RF9</a>, <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf13">RF13</a>,
+    <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf14">RF14</a>, <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf15">RF15</a>,
+    <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf16">RF16</a> and <a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf17">RF17</a>.<br>
+    The core business runs on the contexts <span class="keyword">ctxcargorobot</span> and <span class="keyword">ctxcargoservice</span>.<br>
+    The following tables, resulting from the requirements analysis from sprint0, will be the starting point for the current sprint.</p>
+  <h3>2.1 Entities</h3>
+  <table>
+    <tr>
+      <th>Entity</th>
+      <th>Activity</th>
+      <th>Type</th>
+      <th>Description/Behaviour</th>
+    </tr>
+    <tr>
+      <td><span class="keyword">productService</span></td>
+      <td>Reactive & proactive</td>
+      <td>Actor</td>
+      <td>
+        Actor that receives and handles products creation and deletion requests.
+        It associates a PID to a product.
+      </td>
+    </tr>
+    <tr>
+      <td><span class="keyword">cargoService</span></td>
+      <td>Reactive & proactive</td>
+      <td>Actor</td>
+      <td>The mind of the system: it handles requests to <span class="keyword">cargorobot</span> and consults, updates and manages 
+        the product database and <span class="keyword">cargorobot</span>. It also sends updates to the <span class="keyword">web-gui</span>. 
+      </td>
+    </tr>
+    <tr>
+      <td><span class="keyword">cargorobot</span></td>
+      <td>Reactive</td>
+      <td>Actor</td>
+      <td>The main entity of the maritime cargo system, which moves within the hold area and 
+          performs product delivery to a slot when <span class="keyword">sonar sensor</span> detects its arrival at the <span class="keyword">ioport.</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">web-gui</span></td>
+      <td>Reactive</td>
+      <td>Actor</td>
+      <td>Entity that receives data from the <span class="keyword">cargoService</span> and updates a web-GUI, used to monitor the status of the hold. 
+        We model it as an actor beacuse it processes messages one by one and updates the web-GUI accordingly. </td>
+    </tr>
+    <tr>
+      <td><span class="keyword">testCargo</span></td>
+      <td>Proactive</td>
+      <td>(Test)<br>Actor</td>
+      <td>Test actor that sends dummy requests to the <span class="keyword">cargoService</span>  in order to verify how the whole system reacts.</td>
+    </tr>
+  </table>
+
+  <h3>2.2 Data</h3><table>
+    <tr>
+      <th>Data</th>
+      <th>Type</th>
+      <th>Description</th>
+    </tr>
+    <tr>
+      <td>productWeight</td>
+      <td>Floating point variable</td>
+      <td>
+        It's the container weight to load expressed in kg (productWeight > 0).
+        <pre><code>var productWeight : Float // productWeight > 0</code></pre>
+      </td>
+    </tr>
+    <tr>
+      <td>D</td>
+      <td>Integer variable</td>
+      <td>
+        It indicates the current distance (in cm) measured by the sonar.
+        <pre><code>var D : Int</code></pre>
+      </td>
+    </tr>
+    <tr>
+      <td>PID</td>
+      <td>Integer variable</td>
+      <td>
+        It indicates the product ID (PID &gt; 0)
+        <pre><code>var PID : Int</code></pre>
+      </td>
+    </tr>
+    <tr>
+      <td>DFREE</td>
+      <td>Integer constant</td>
+      <td>
+        It is the max distance (in cm) that the sonar can measure before the system assumes that it's broken.
+        <pre><code>const val DFREE : Int</code></pre>
+      </td>
+    </tr>
+    <tr>
+      <td>MAX_LOAD</td>
+      <td>Floating point constant</td>
+      <td>
+        It's the max weigth (in kg) that can be loaded in the hold.
+        <pre><code>const val MAX_LOAD : Float</code></pre>
+      </td>
+    </tr>
+    <tr>
+      <td>SLOTS</td>
+      <td>Integer constant</td>
+      <td>
+        It's the number of slots in the hold.
+        <pre><code>const val SLOTS : Int // SLOTS = 5 in this case</code></pre>
+      </td>
+    </tr>
+  </table>
+
+
+  <h3>2.3 Messages</h3>
+  <table>
+    <tr>
+      <th>Messages</th>
+      <th>Type</th>
+      <th>Sender</th>
+      <th>Receiver</th>
+      <th>Description</th>
+    </tr>
+    <tr>
+      <td><span class="keyword">getProduct</span></td>
+      <td>Request</td>
+      <td>cargoService</td>
+      <td>productService</td>
+      <td>Requests the PID of a product</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">loadProduct</span></td>
+      <td>Request</td>
+      <td>Alien</td>
+      <td>cargoService</td>
+      <td>Requests the load in the hold of a given product</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">loadAccepted</span></td>
+      <td>Reply</td>
+      <td>cargoService</td>
+      <td>Alien</td>
+      <td>The product can be loaded on the hold as requested (there is at least one slot free and the weight is less or equal to the MAX_WEIGHT)</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">loadRejected</span></td>
+      <td>Reply</td>
+      <td>cargoService</td>
+      <td>Alien</td>
+      <td>The product can't be loaded on the hold as requested (there isn't any free slot or the weight would be greater than the MAX_WEIGHT)</td>
+    </tr>
+  </table>
+
+  <h3>2.4 Working area</h3>
+  <p>The robot will move around the following working area:</p>
+  <div class="image-container">
+    <img src="./img/workingarea.png" alt="Working area">
+    <div class="caption">Figure 1 – Working area</div>
+  </div>
+  <p>The relevant areas are:
+    <ul>
+        <li><span style="color:#df4143">HOME</span>: upper left corner in which the robot has to stay when it's in idle</li>
+        <li><span style="color:#4c7cc3">ioport</span>: opening in the lower left border from which the robot retrieves the containers</li>
+        <li><span style="color:#ba67ca">slot{1..4}</span>: they're the designated areas where the robot has to leave the containers</li>
+        <li><span style="color:#ba67ca">slot5</span>: permanently occupied area that the robot has to avoid</li>
+    </ul>
+  </p>
+
+  <h2>3. Problem analysis</h2>
+  <h3>3.1 Cargorobot</h3>
+  <p>The implementation of <span class="keyword">cargorobot</span> poses many challenges.</p>
+
+  <blockquote>Problem: show a prototype of the robot to the customer</blockquote>
+  <p>The realization of a physical robot in the early stage of development, for the purpose of prototyping, is too expensive.
+  Therefore, for this purpose we're gonna use <a href="./docs/VirtualRobot23.pdf">VirtualRobot</a>, an emulator of a DDR robot that our software house has already develop.
+  It also features a <span class="keyword-other">virtual interface</span> that allows <span class="keyword">BasicRobot</span> to communicate with it and a <span class="keyword-other">virtual environment (WEnv)</span> that can be used to show to the customer how the robot moves and works around the hold.<br>
+  <div class="image-container">
+    <img width="90%" alt="VirtualRobot's WEnv" title="VirtualRobot's WEnv" src="./img/WEnv.png">
+    <div class="caption">Figure 2 – VirtualRobot's WEnv</div>
+  </div>
+  </p>
+  
+  <h4>3.1.1 Hold area representation and knowledge</h4>
+  <blockquote>Problem: <span class="keyword">cargorobot</span> has to know the location of his home spot and where the ioport, the slots and the obstacles are.</blockquote>
+  <p>In order to represent its map in a <span class="keyword-other">machine-understandable</span> way, the hold area will be simplified as a <span>matrix of M rows and N columns</span> where every cell is the size of the robot.
+    Our software house has already developed a software component, named <a href="https://github.com/anatali/issLab2025/tree/main/unibomapbuild25">Mapper</a>, that moves a DDR robot around an area in order to explore it and learn its configuration; 
+    the produced output is a text file with a grid of symbols, each representing a cell. Notable position will be than manually reported and each cell will be either marked as a:
+    <ul>
+      <li><b>0</b>: meaning that the cell has never been explored</li>
+      <li><b>1</b>: meaning that the cell is free and is not part of any specific area</li>
+      <li><b>X</b>: meaning that the cell is occupied by an obstacle</li>
+      <li><b>H</b>: indicating the <span class="keyword">HOME</span> cell</li>
+      <li><b>I</b>: meaning that the lower edge of the cell is part of the <span class="keyword">ioport</span></li>
+      <li><b>{A-E}</b>: meaning that the cell is part of a <span class="keyword">SLOT</span>, where the matching between a letter and the slot's number is immediate (A->1, B->2, ...)</li>
+    </ul>
+  </p>
+
+  <h4>3.1.2 Cargorobot movement</h4>
+  <blockquote>Problem: implementation of the software that moves the robot</blockquote>
+  <p>The implementation of this software from scratch would be very time consuming and possibly tricky.
+    However, our software house has already developed <a href="https://github.com/anatali/issLab2025/tree/main/unibo.basicrobot24">BasicRobot</a>, 
+    a system built using the Qak language that can drive a DDR robot.</p>
+
+  <blockquote>Problem: how does <span class="keyword">cargorobot</span> evaluate the path to follow in order to complete a load task?</blockquote>
+  <p>Our software house has already developed a software component, named <a href="https://github.com/anatali/issLab2025/tree/main/unibo.planner23">Planner</a>, that implements the A* algorithm in order to find a path to a goal translates it in a sequence of machine-understandable commands.<br>
+    N.B: this time it is NOT given as an already built actor.</p>
+
+  <h4>3.1.3 Cargorobot's many components</h4>
+  <blockquote>Question: who's who?</blockquote>
+  <p>Summarizing, the following are the main entities involved in the realization of Cargorobot.</p>
+  <table>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Function</th>
+    </tr>
+    <tr>
+      <td>cargorobot</td>
+      <td>Actor</td>
+      <td>High-level component that wraps the functionality of the robot from the point of view of the system; it can be modeled after BasicRobot</td>
+    </tr>
+    <tr>
+      <td>Mapper</td>
+      <td>Actor</td>
+      <td>Software component that utilizes a DDR robot in order to map an area (i.e. the hold)</td>
+    </tr>
+    <tr>
+      <td>Planner</td>
+      <td>Actor</td>
+      <td>Software component that calculate a path for the DDR robot to follow in order to reach a specific goal</td>
+    </tr>
+    <tr>
+      <td>DDR robot</td>
+      <td>The actual (physical) robot</td>
+      <td>A robot that has two driving wheels, that can move indipendently (hence the Differential Drive technique) on one axle and a third wheel on a second axle. 
+        For the purpose of this project we're gonna use a simplified version where the robot can move forward and backward, stop and rotate left and right of 90°</td>
+    </tr>
+    <tr>
+      <td>VirtualRobot</td>
+      <td>Virtual emulator</td>
+      <td>A virtual robot that moves in a virtual environment, called WEnv, and can be used in the prototyping phase</td>
+    </tr>
+  </table>
+  
+  <h3>3.2 Database</h3>
+  <p>The customer has requested a database system that will manage the persistence of registered products (<a href="../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf17">RF17</a>).
+  To this end, we chose to adopt <span class="keyword">MongoDB</span>, a NoSQL database that utilize JSON-like documents in order to represent items (in this case, products); this characteristic will be convenient when we'll have to process data within our system.</p>
+    <div class="image-container">
+      <a href="https://www.mongodb.com/"><img width="90%" alt="MongoDB: a NoSQL database" title="MongoDB: a NoSQL database" src="./img/MongoDB.png"></a>  
+      <div class="caption">Figure 3 – MongoDB</div>
+    </div>
+
+  <h3>3.3 Interactions</h3>
+  <h4>3.3.1 Messages format</h4>
+  <blockquote>Problem: </b>translating JSON to/from Product POJO</blockquote>
+  <p>MongoDB utilizes the JSON format to represent items, but we will develop a POJO that can parse that into/from a Product bean, incapsulating the information of a given product.</p>
+
+  <h4>3.3.2 Creation/Deletion of a product</h4>
+  <blockquote>Problems:<br>
+    how does the system manage creation requests of a product item already present in the DB?<br>
+    how does the system manage deletion requests of a product item that is not in the DB?</blockquote>
+  When it is not possible to satisfy a creation or a deletion request (either because an item is already or is not in the DB, respectively) the system will use a known value instead of the product's PID.
+
+  <h4>3.3.3 Load request</h4>
+  <blockquote>Problem: when does the system accept or reject a load request?</blockquote>
+  <p><span class="keyword">cargoservice</span> accept a load request if:
+  <ul>
+    <li>The requested product, identified by its PID, is already present in the DB</li>
+    <li>There is a free slot available</li>
+    <li>The added weight by the product must be so that the total weight on the hold would be less or equal to <span class="keyword">MAX_WEIGHT</span></li>
+    <li>The system isn't stopped by the alarm system (this feature will be addressed in a future sprint)</li>
+  </ul>
+  When a new load request arrives, <span class="keyword">cargoservice</span> verifies if the product is present in the DB;
+   if so, it then evaluates the hold condition. When all these checks have been successful, it then accepts the request;
+   otherwise, it rejects it.
+  </p>
+
+  <h4>3.3.4 Logical architecture</h4>
+  <p>After the problem analysis the following is the logical architecture of the core business of the system.</p>
+  <div class="image-container">
+    <img width="90%" alt="logicalArchitecture" title="logicalArchitecture" src="./img/probAnalysis_model.png">  
+    <div class="caption">Figure 4 – Logical architecture</div>
+  </div>
+
+
+  <a href="../src/logArch.qak">Qak model</a> of the logical architecture.
+
+  <h2>4. Project</h2>
+  <p>
+    Since the implementation of the core business of the system is quite an heavy task, we decided to split the work in three subparts:
+    <ul>
+      <li><a href="#part-1">Part 1</a>: HoldPlanner, hold map management and robot movement</li>
+      <li><a href="#part-2">Part 2</a>: MongoDB, adoption and implementation of a middleware</li>
+      <li><a href="#part-3">Part 3</a>: Maritime cargo's core business implementation</li>
+    </ul>
+  </p>
+
+  <h3 id="part-1">4.1 Part 1: HoldPlanner project, hold map management and robot movement</h3>
+  <p>In 2023 our software house developed <a href="https://github.com/anatali/issLab2025/tree/main/unibo.planner23">unibo.planner23</a>, a software component that can calculate a path for a DDR robot to follow in order to reach a given target in a room.
+    It also recently developed a Java class that implements the <span class="keyword-other">A* algorithm</span> in order to find a path, called <a href="https://github.com/anatali/issLab2025/blob/main/unibomapbuild25/src/main/java/planner/AStarPathfinding.java">AStarPathfinding</a>.
+    The first one is not strictly compatible with the task of searching a path for <span class="keyword">cargorobot</span> to follow in order to load a container in a given slot, but it can be somewhat usefull for the development of a dedicated planner for the hold, named <span class="keyword">PlannerForHold</span>, 
+    i.e. a new software component that will calculate the paths for any target on the hold (i.e. the home spot, the ioport and the four available slots) using the A* algorithm. It will be a <span class="keyword-other">POJO</span> and it will be used by the <span class="keyword">cargorobot</span> actor.
+    The state of the robot will be encapsulated in RobotState, another simple POJO developed by our software house.<br>
+    We also have to introduce other entities to give an <u>object oriented representation of the hold</u> and a way to <u>create and parse a machine-understandable map</u>; those classes are:
+    <ul>
+      <li><span class="keyword">Cell</span>: a simple java bean representing a single cell of the hold map's grid</li>
+      <li><span class="keyword">CellType</span>: an enumerative containing every possible identification for a Cell, i.e. FREE, OBSTACLE, HOME, IOPORT or one of the SLOTS (either one of the four available or the fifth)</li>
+      <li><span class="keyword">HoldMap</span>: a <span class="keyword-other">singleton</span> object that is a collection of Cell(s); since the dimensions of the hold are not predetermined il will encapsulate a list of lists of Cell(s) dinamically allocated</li>
+      <li><span class="keyword">HoldMapLoader</span>: a convenience class that reads and saves the hold's map in two form, a binary file containing an HoldMap object and a text representation of it</li>
+      <li><span class="keyword">HoldMapParser</span>: a convenience class that parses a HoldMap so that it can be used by the planner (i.e. a "simplified" grid version that containes only two types of cell, either an obstacle or a "walkable" one)</li>
+    </ul>
+  </p>
+  <div class="image-container">
+    <img width="90%" alt="HoldPlanner's class diagrams" title="HoldPlanner's class diagrams" src="./img/HoldPlannerClassDiagram.png">
+    <div class="caption">Figure 5 – HoldPlanner's class diagrams</div>
+  </div>
+
+  <h3 id="part-2">4.2 Part 2: MongoDB, adoption and implementation of a middleware</h3>
+  We integrated MongoDB into the system architecture as a persistent data storage solution for managing cargo hold state 
+  and tracking the system’s current load. This integration enables reliable, scalable, and decoupled data management 
+  in support of dynamic cargo operations.
+  To interface with MongoDB, we introduced a <span class="keyword-other">middleware</span>, named <span class="keyword">dbdriver</span>, that 
+  encapsulates MongoDB-specific logic and exposes a high-level API to the rest of the system, ensuring that business logic remains database-agnostic.<br>
+  This new software component is used by a new Actor, <span class="keyword">dbwrapper</span>, in order to let the system interact with the DB. Two other main Actors of the system interact with it:
+  <ul>
+    <li><span class="keyword">productservice</span>, in order to carry out its operations</li>
+    <li><span class="keyword">cargoservice</span>, in order to know if a product for which a load request has been received already exists in the DB</li>
+    <li><span class="keyword">holdmanager</span>: a newly introduced Actor that is responsible for slot assignment logic and hold's load information management.
+      It ensures consistency between the logical model of cargo slot's allocation and the physical state reflected in the database.</li>
+  </ul>
+  <p>
+    In order to use MongoDB, the following dependencies needs to be added to the gradle.build file:
+    <pre>
+      implementation 'org.mongodb:mongodb-driver-kotlin-coroutine:4.11.0'
+      implementation 'org.mongodb:mongodb-driver-reactivestreams:4.11.0'
+      implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
+      implementation 'ch.qos.logback:logback-classic:1.4.14'
+      implementation 'org.slf4j:slf4j-api:2.0.13'
+    </pre>
+  </p>
+
+  This middleware architecture introduces loose coupling between Actors and persistent storage, enhancing maintainability and testing.
+  The system is now able to:
+  <ul>
+    <li>Persist cargo slot and weight data across sessions</li>
+    <li>Validate loading constraints</li>
+    <li>Dynamically respond to loading requests with up-to-date information</li>
+  </ul>
+
+  <div class="image-container">
+    <img width="90%" alt="dbdriver middleware's class diagrams" title="dbdriver middleware's class diagrams" src="./img/dbdriverClassDiagram.png">
+    <div class="caption">Figure 6 – dbdriver middleware's class diagrams</div>
+  </div>
+
+  <h3 id="part-3">4.3 Part 3: Maritime cargo's core business implementation</h3>
+  The core business logic of the Maritime cargo system has been implemented primarily 
+  within the <a href="../src/core.qak">cargoservice and productservice QActor</a>. 
+  
+  <h4>4.3.1 cargoservice</h4>
+  This actor manages the process of loading products into the ship’s hold.
+  Below is a description of the main workflow and responsibilities:
+  <ol>
+    <li>
+      <b>Load requests</b>:
+      The <span class="keyword">cargoservice</span> actor listens for <span class="keyword">loadProduct</span> requests sent by the client. 
+      When such a request is received, the actor extracts from the message payload.
+    </li>
+    <li><b>Slot availability</b>:
+        To ensure there is a free slot in the hold, <span class="keyword">cargoservice</span> queries the <span class="keyword">holdManager</span> actor 
+        asking for a slot. The reply contains either a valid slot number or indicates that no slots are available.
+        If no free slot is available (Slot &le; 0), the request is <span style="color:red">rejected</span> so the 
+        actor replies to the client with <span class="keyword">loadRejected</span>. 
+        If a slot is available, the actor proceeds to check the total load weight.
+    </li>
+    <li>
+      <b>Weight check</b>:
+      The actor requests the current loaded weight. Once it receives the reply it evaluates whether adding the new product 
+      would exceed the <span class="keyword">MAX_LOAD</span> constraint.
+      If the new total weight would exceed <span class="keyword">MAX_LOAD</span>, the request is <span style="color:red">rejected</span> 
+      and it replies the client with <span class="keyword">loadRejected</span>, if the load is within acceptable limits, 
+      the load is <span style="color:green">accepted</span>, then the hold state is updated, by requesting the operation to <span class="keyword">holdManager</span>,
+      and <span class="keyword">loadAccepted</span> is sent to the client.
+    </li>
+  </ol>
+
+  <h4>4.3.2 productservice</h4>
+  This actor provides an interface to manage products, supporting two main operations:
+  <ul>
+    <li>
+      <span class="keyword">createProduct</span>:
+      the actor recives the request and forward it to <span class="keyword">dbwrapper</span>, which stores the new product in the database.
+      When the reply is received, productservice passes the result back to the client, confirming the creation and providing the unique PID.
+    </li>
+    <li>
+      <span class="keyword">deleteProduct</span>:
+      the actor receives the request and forward it to <span class="keyword">dbwrapper</span>, which deletes the product from the database.
+      When the reply is received, productservice returns the confirmation to the client.
+    </li>
+  </ul>
+  Now, basically it receives requests from external clients and it delegates the persistence logic to the <span class="keyword">dbwrapper</span>, 
+  which is the real entity in charge of interacting with the underlying database software (MongoDB).<br>
+  This design ensures that <span class="keyword">productservice</span> acts purely as a <span class="keyword-other">business façade</span>, 
+  decoupled from the storage layer, with no direct dependencies on MongoDB APIs.
+
+  <h3>4.4 Logical architecture of the whole core system</h3>
+  <p>After the project phase, the logical architecture of the system that we developed looks like the following:</p>
+  <div class="image-container">
+    <img width="90%" alt="logicalArchitecture" title="logicalArchitecture" src="./img/project_model.png">  
+    <div class="caption">Figure 7 – Core business' logical architecture</div>
+  </div>
+
+  <h2>5. Test plans</h2>
+  <table>
+    <tr>
+      <th>Test</th>
+      <th>Involved Actors</th>
+      <th>Description</th>
+      <th>Files</th>
+    </tr>
+    <tr>
+      <td><b>Products' creation and deletion requests</b></td>
+      <td>
+        <ul>
+          <li>productService</li>
+          <li>dbwrapper</li>
+        </ul>
+      </td>
+      <td>This test verifies if requests of either creation or deletion of products are correctly managed</td>
+      <td>
+        Qak: <a href="../src/test_productservice.qak">test_productservice.qak</a><br>
+        JUnit test: <a href="../src/test/java/Test_productservice.java">Test_productservice.java</a>
+      </td>
+    </tr>
+    <tr>
+      <td><b>Load request <span style="color:green">accepted</span></b></td>
+      <td>
+        <ul>
+          <li>cargoService</li>
+          <li>holdManager</li>
+          <li>dbwrapper</li>
+        </ul>
+      </td>
+      <td rowspan="4">
+        A load request must be accepted if and only if:
+        <ul>
+          <li>the product is already registered in the DB</li>
+          <li>the added product's weight does not result in the hold's weight exceeding MAX_WEIGHT</li>
+          <li>there is an available slot</li>
+        </ul>
+        Otherwise, it must be rejected.
+      </td>
+      <td rowspan="4">
+        Qak: <a href="../src/test_cargoservice.qak">test_cargoservice.qak</a><br>
+        JUnit test: <a href="../src/test/java/Test_cargoservice.java">Test_cargoservice.java</a>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <b>Load request <span style="color:red">rejected</span><br>
+        (product is not registered yet)</b></td>
+      <td>
+        <ul>
+          <li>cargoService</li>
+          <li>holdManager</li>
+          <li>dbwrapper</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <b>Load request <span style="color:red">rejected</span><br>
+        (product to load is too heavy)</b></td>
+      <td>
+        <ul>
+          <li>cargoService</li>
+          <li>holdManager</li>
+          <li>dbwrapper</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <b>Load request <span style="color:red">rejected</span><br>
+        (no available slot)</b></td>
+      <td>
+        <ul>
+          <li>cargoService</li>
+          <li>holdManager</li>
+          <li>dbwrapper</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><b>Robot's container loading procedure</b></td>
+      <td>
+        <ul>
+          <li>cargorobot</li>
+          <li>(BasicRobot)</li>
+        </ul>
+      </td>
+      <td>cargorobot has to go to the ioport, from there to the assigned slot and back home</td>
+      <td>
+        Qak: <a href="../src/test_cargorobot.qak">test_cargorobot.qak</a>
+      </td>
+    </tr>
+  </table>
+
+  <h2>6. Conclusions</h2>
+  Starting from the initial analysis conducted during Sprint0, this iteration focused on identifying and implementing 
+  the requirements related to the core business of the application.
+  Specifically, we developed two middlewares, one to manage the hold mapping logic and represent the ship’s storage structure and another one to interact
+  with the database system responsible for maintaining the state of loaded products and weights.<br>
+  In addition, the core business services themselves were implemented: <span class="keyword">productservice</span>, which handles product creation and deletion, 
+  and <span class="keyword">cargoservice</span>, which coordinates the loading process with proper validation of capacity constraints.<br>
+  All planned activities were completed within the estimated timeframe, and the implementation milestones for Sprint1 
+  were successfully achieved. During the backlog and problem analysis phases it has emerged the <span class="keyword">client</span> actor, that will logically need to interact with a user; 
+  for this porpuse, we possibly add the development of a <span class="keyword-other"> user interface</span> to Sprint3.<br>
+  This sprint laid the foundation for the next development phases, which are:
+  <ol>
+    <li><b>Sprint2 - ioport</b></li>
+    <li><b>Sprint3 - web-gui</b></li>
+  </ol>
+
+  The following one is the updated workplan:
+  <table>
+    <tr>
+      <th>Sprint</th>
+      <th>Start</th>
+      <th>End</th>
+      <th>Man-hours</th>
+    </tr>
+    <tr>
+      <td>Sprint2</td>
+      <td>15/07/2025</td>
+      <td>18/07/2025</td>
+      <td>7</td>
+    </tr>
+    <tr>
+      <td>Sprint3</td>
+      <td>21/07/2025</td>
+      <td>24/07/2025</td>
+      <td>11</td>
+    </tr>
+  </table>
+
+  <h2>Developing Team</h2>
+  <div class="team">
+    <div class="member">
+      <img src="./img/profilePictures/clarissadesimoni.jpg" alt="Clarissa De Simoni">
+      <div class="member-name">Clarissa De Simoni</div>
+      <div class="member-role">0001139600</div>
+      <a href="mailto:clarissa.desimoni@studio.unibo.it">clarissa.desimoni@studio.unibo.it</a>
+    </div>
+    <div class="member">
+      <img src="./img/profilePictures/andreagrano.jpg" alt="Andrea Grano">
+      <div class="member-name">Andrea Grano</div>
+      <div class="member-role">0900087513</div>
+      <a href="mailto:andrea.grano@studio.unibo.it">andrea.grano@studio.unibo.it</a>
+    </div>
+    <div class="member">
+      <img src="./img/profilePictures/andrealobuglio.jpg" alt="Andrea Lo Buglio">
+      <div class="member-name">Andrea Lo Buglio</div>
+      <div class="member-role">0001193726</div>
+      <a href="mailto:andrea.lobuglio@studio.unibo.it">andrea.lobuglio@studio.unibo.it</a>
+    </div>
+  </div>
+  <script src="./script/index.js"></script>
+</body>
+</html>
+
