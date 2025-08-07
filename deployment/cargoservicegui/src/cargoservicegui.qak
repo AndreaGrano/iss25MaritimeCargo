@@ -1,0 +1,47 @@
+System iss25maritimecargo_cargoservicegui
+
+Event stop			: stop(V)
+Event resume		: resume(V)
+Event holdChanged	: holdChanged(Slot,PID,Weight)
+
+Context ctxcargoservicegui	ip[host="localhost" port=8002]
+
+QActor qakholdwsserver context ctxcargoservicegui {
+	import "main.java.*"
+	
+	 [#
+        val holdWSServer = HoldWSServer();
+        holdWSServer.start();
+     #]
+	State init initial {
+		println("$name | starts") color magenta
+	}
+	Goto work
+	
+	State work {}
+	Transition t0
+		whenEvent stop -> halt
+		whenEvent holdChanged -> updateHold
+	
+	State halt {
+		[# holdWSServer.haltCargo() #]
+	}
+	Transition t1
+		whenEvent resume -> resume
+	
+	State resume {
+		[# holdWSServer.resumeCargo() #]
+	}
+	Goto work
+	
+	State updateHold {
+		onMsg(holdChanged : holdChanged(Slot,PID,Weight)) {
+			[#
+				val Slot = payloadArg(0).toInt();
+				val PID = payloadArg(1).toInt();
+				val Weight = payloadArg(2).toDouble();
+				holdWSServer.updateHold(Slot,PID,Weight);
+			#]
+		}
+	}
+}

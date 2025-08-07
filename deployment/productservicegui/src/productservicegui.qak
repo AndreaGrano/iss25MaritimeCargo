@@ -1,0 +1,18 @@
+System iss25maritimecargo_productservicegui
+
+Context ctxproductws ip [host="localhost" port=8012]
+
+QActor qakproductwsserver context ctxproductws {
+	import "main.java.*"
+	
+	 [#
+        val productWSServer = ProductWSServer();
+        productWSServer.start();
+     #]
+	State init initial {
+		println("$name | starts") color magenta
+	}
+	Goto work
+	
+	State work {}
+}

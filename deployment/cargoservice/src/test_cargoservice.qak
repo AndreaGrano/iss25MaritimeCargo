@@ -1,0 +1,353 @@
+System test_cargoservice
+
+// cargoservice -> dbwrapper
+Request	getProductWeight	:	getProductWeight(PID)
+Reply	productWeight		:	productWeight(Weight) for getProductWeight
+
+// cargoservice -> holdmanager
+Request getFreeSlot			:	getFreeSlot(V)
+Reply	freeSlot			:	freeSlot(FreeSlot) for getFreeSlot
+
+Request getLoadedWeight		:	getLoadedWeight(V) // delegated to dbwrapper
+Reply	loadedWeight		:	loadedWeight(V) for getLoadedWeight
+
+Dispatch updateHold			:	updateHold(Slot, PID) // delegated to dbwrapper
+
+// holdmanager -> dbwrapper
+Request getAllSlots			:	getAllSlots(V)
+Reply slotsList				:	slotsList(Slotlist) for getAllSlots
+
+Request getAllProducts		:	getAllProducts(V)
+Reply 	allProducts			:	allProducts(ProductsList) for getAllProducts
+
+// client -> cargoservice
+Request	loadProduct			:	loadProduct(PID)
+Reply	loadAccepted		:	loadAccepted(V) for loadProduct
+Reply	loadRejected		:	loadRejected(Reason) for loadProduct
+
+// cargoservice -> cargoservice
+Dispatch goToWait			:	goToWait(V)
+
+// containermanager -> cargoservice
+Request	containerWaiting	:	containerWaiting(V)
+Reply	containerLoaded		:	containerLoaded(V) for containerWaiting
+
+// cargoservice -> cargorobot
+Request doDelivery			:	doDelivery(Slot)
+Reply	deliveryDone		:	deliveryDone(V) for doDelivery
+
+
+// CONTEXTS
+Context ctxcargoservice	ip[host="localhost" port=8001]
+
+
+// ACTORS
+QActor dbwrapper context ctxcargoservice {
+	import "main.java.dbdriver.*"
+	
+	 [#
+        val wrapper = Wrapper()
+        lateinit var CurrProduct : Product
+    #]
+
+    State init initial {
+        println("$name: STARTING...") color yellow
+        println("$name: initialization complete") color yellow
+    }
+    Goto wait
+
+    State wait {
+        println("$name: waiting...") color yellow
+    }
+    Transition t0
+    	whenRequest getProductWeight -> getproductweight
+    	whenRequest getFreeSlot -> getfreeslot
+    	whenRequest	getAllProducts -> getallproducts
+    	whenRequest	getAllSlots	-> getallslots
+    	whenRequest getLoadedWeight -> getloadedweight
+    	whenMsg updateHold -> updatehold
+    	
+    State getproductweight {
+    	printCurrentMessage color yellow
+    	
+    	 onMsg(getProductWeight : getProductWeight(PID)) {
+            [#
+                val PID = payloadArg(0).toInt()
+                CurrProduct = wrapper.getProduct(PID)
+            #]
+            
+            if [# !CurrProduct.getName().equals("NOT_FOUND") #] {
+				[# 
+				  val ProdWeight = CurrProduct.getWeight()
+				#]
+				replyTo getProductWeight with productWeight : productWeight($ProdWeight)
+            } else {
+                replyTo getProductWeight with productWeight : productWeight(0)
+            }
+        }
+    }
+    Goto wait
+    
+    State getfreeslot {
+    	printCurrentMessage color yellow
+    	
+    	onMsg(getFreeSlot : getFreeSlot(V)) {
+            [#
+                val FreeSlot = wrapper.getFirstAvailableSlot()
+            #]
+
+            replyTo getFreeSlot with freeSlot : freeSlot($FreeSlot)
+        }
+    }
+    Goto wait
+    
+    State getallproducts {
+    	printCurrentMessage color yellow
+    	
+    	onMsg(getAllProducts : getAllProducts(V)) {
+    		[# var ProductsList = wrapper.getAllProducts() #]
+    		
+    		replyTo getAllProducts with allProducts : allProducts($ProductsList)
+    	}
+    }
+    Goto wait
+    
+    State getallslots {
+    	printCurrentMessage color yellow
+    	
+    	onMsg(getAllSlots : getAllSlots(V)) {
+    		[# var SlotsList = wrapper.getAllSlots() #]
+    		
+    		replyTo getAllSlots with slotsList : slotsList($SlotsList)
+    	}
+    }
+    Goto wait
+    
+    State getloadedweight {
+    	printCurrentMessage color yellow
+    	
+    	onMsg(getLoadedWeight : getLoadedWeight(V)) {
+	    	[# 
+	    		var slotsList = wrapper.getAllSlots()
+	    		
+	    		var LoadedWeight = 0.0
+	    		for(slot in slotsList) {
+	    			var PID = slot.getPID()
+	    			if(PID > 0) {
+		    			var product = wrapper.getProduct(PID)
+		    			LoadedWeight += product.getWeight()
+		    		}
+	    		}
+	    	#]
+	    	
+	    	replyTo getLoadedWeight with loadedWeight : loadedWeight($LoadedWeight)
+    	}
+    }
+    Goto wait
+    
+    State updatehold {
+    	printCurrentMessage color yellow
+    	
+		 onMsg(updateHold : updateHold(Slot, PID)) {
+	        [#
+	            val slotNumber = payloadArg(0).toInt()
+	            val pid = payloadArg(1).toInt()
+	            val res = wrapper.loadProduct(pid)
+	        #]
+	        // Qui non serve reply, è un dispatch
+	    }
+    }
+    Goto wait
+}
+
+QActor cargoservice context ctxcargoservice {
+	[#
+			//val MAX_LOAD = System.getenv("MAX_LOAD").toDouble()
+			//val SLOTS = System.getenv("SLOTS").toInt()
+			
+			val MAX_LOAD = 80.0
+			val SLOTS = 4
+			
+			var PID = -1
+			var Slot = -1
+			var Loadedweight = 0.0
+			var assignedSlots = ArrayList<Int>();
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color blue
+		
+		println("$name: initialization complete") color blue
+	}
+	Goto wait
+	
+	State wait {		
+		println("$name: waiting for requests...") color blue
+	}
+	Transition t0
+		whenRequest loadProduct ->	handle_loadproduct
+		whenRequest containerWaiting -> containerwaiting
+		whenReply deliveryDone -> deliverydone
+		
+	State handle_loadproduct {
+		printCurrentMessage color blue
+		
+		onMsg(loadProduct : loadProduct(PID)) {
+			[#
+				PID = payloadArg(0).toInt()
+			#]
+			
+			request holdmanager -m getFreeSlot : getFreeSlot(1)
+		}
+	}
+	Transition t1
+		whenReply	freeSlot -> evaluate_slot
+		
+	State evaluate_slot {
+		printCurrentMessage color blue
+		
+		onMsg(freeSlot : freeSlot(Slot)) {
+			[# Slot = payloadArg(0).toInt() #]
+			
+			if [# Slot > 0 #] {
+				request holdmanager -m getLoadedWeight : getLoadedWeight(1)
+			} else {
+				println("$name: load rejected, no more free slots") color blue
+				
+				replyTo loadProduct with loadRejected : loadRejected(1)
+				
+				autodispatch goToWait : goToWait(1)
+			}
+		}
+	}
+	Transition t2
+		whenReply loadedWeight -> update_loaded_weight
+		whenMsg goToWait -> wait
+		
+	State update_loaded_weight {
+		printCurrentMessage color blue
+		
+		onMsg(loadedWeight : loadedWeight(Weight)) {
+			[# Loadedweight = payloadArg(0).toDouble() #]
+			request dbwrapper -m getProductWeight : getProductWeight($PID)
+			
+		}
+	}
+	Transition t3
+	whenReply productWeight -> evaluate_weight
+	
+	State evaluate_weight {
+		printCurrentMessage color blue
+		
+		onMsg(productWeight : productWeight(Weight)) {
+			[# var Productweight = payloadArg(0).toDouble() #]
+			if [# Productweight > 0 #] {
+				if [# (Loadedweight + Productweight) < MAX_LOAD #] {
+						println("$name: load accepted") color blue
+						
+						forward holdmanager -m updateHold : updateHold($Slot, $PID)
+						
+						[# assignedSlots.add(Slot) #]
+						
+						replyTo loadProduct with loadAccepted : loadAccepted(1)
+					} else {
+						println("$name: load rejected, too heavy") color blue
+						
+						replyTo loadProduct with loadRejected : loadRejected(1)
+					}
+			} else {
+				replyTo loadProduct with loadRejected : loadRejected(1)
+			}	
+		}
+	}
+	Goto wait
+	
+	State containerwaiting {
+		printCurrentMessage color blue
+		
+		onMsg(containerWaiting : containerWaiting(V)) {
+			[#
+				var Slot =  assignedSlots.get(0)
+				assignedSlots.removeAt(0)
+			#]
+			
+			request cargorobot -m doDelivery : doDelivery($Slot)
+		}
+	}
+	Goto wait
+	
+	State deliverydone {
+		printCurrentMessage color blue
+		
+		replyTo containerWaiting with containerLoaded : containerLoaded(1)
+	}
+	Goto wait
+}
+
+QActor holdmanager context ctxcargoservice {	
+	import "main.java.dbdriver.*"
+	import "java.io.*"
+	
+	State init initial {
+		println("$name: STARTING...") color yellow
+		
+		delegate updateHold to dbwrapper
+		delegate getLoadedWeight to dbwrapper
+		delegate getFreeSlot to dbwrapper
+		
+		println("$name: initialization complete") color yellow
+	}
+}
+
+QActor cargorobot context ctxcargoservice {
+	State init initial {
+		println("$name: I'm just a cargorobot mock") color green
+	}
+	Goto wait
+	
+	State wait {
+		println("$name: waiting...") color green
+	}
+	Transition t0
+		whenRequest doDelivery -> simulateDelivery
+		
+	State simulateDelivery {
+		println("$name: simulating a delivery") color green
+		
+		delay 5000
+		
+		println("$name: sending a reply") color green
+		replyTo doDelivery with deliveryDone : deliveryDone(1)
+	}
+}
+
+QActor test context ctxcargoservice {
+	State init initial {
+		println("$name: STARTING...") color red
+		
+		delay 5000
+	}
+	Goto requestload
+	
+	State requestload {
+		println("$name: requesting the load of product 1752617792") color red
+		
+		request cargoservice -m loadProduct : loadProduct(1752617792)
+	}
+	Transition t0
+		whenReply loadAccepted -> containerwaiting
+	
+	State containerwaiting {
+		println("$name: now I'll send a containerWaiting request") color red
+		
+		request cargoservice -m containerWaiting : containerWaiting(1)
+	}
+	Transition t1
+		whenReply containerLoaded -> containerloaded
+		
+	State containerloaded {
+		println("$name: I've received a reply") color red
+		
+		printCurrentMessage color red
+	}
+}

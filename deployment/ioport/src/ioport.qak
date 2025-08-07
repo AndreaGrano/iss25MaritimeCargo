@@ -1,0 +1,244 @@
+System iss25maritimecargo_ioport
+
+// MESSAGES
+// containermanager -> cargoservice
+Request	containerWaiting	:	containerWaiting(V)
+Reply	containerLoaded		:	containerLoaded(V) for containerWaiting
+
+// sonarwrapper -> containermanager, alarmdevice
+Event	distance	:	distance(D)
+
+// events from alarmanager
+Event	stop	:	stop(V)
+Event	resume	:	resume(V)
+
+// containermanager -> containermanager
+Dispatch goToWait		:	goToWait(V)
+
+
+// CONTEXTS
+Context ctxioport ip[host="localhost" port=8007]
+Context ctxcargoservice ip[host="192.168.0.6" port=8003]
+Context ctxcargoservicegui ip[host="192.168.0.6" port=8002]
+
+// ACTORS
+ExternalQActor cargoservice context ctxcargoservice
+
+QActor sonarwrapper context ctxioport {
+	import "java.io.*"
+	[#
+		lateinit var p : Process
+		lateinit var reader : BufferedReader 
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color magenta
+		
+		[#
+			try {
+				p = Runtime.getRuntime().exec("python3 sonar.py")
+				reader = BufferedReader(InputStreamReader(p.getInputStream()))
+			} catch(e : Exception) {
+				println("sonarwrapper sonarStart ERROR: $e")
+			}
+		#]
+		
+		println("$name: initialization complete") color magenta
+	}
+	Goto sendsonardata
+	
+	State sendsonardata {
+		[#
+			try {
+				var V = reader.readLine()
+				if(V != null) {
+					val payload = "distance( ${V} )"
+					val event = MsgUtil.buildEvent("sonarwrapper", "distance", payload)
+					
+					emitLocalStreamEvent(event)
+				}
+			} catch(e : Exception) {
+				println("sonarwrapper sendSonarData ERROR: $e")
+			}
+		#]
+		
+		delay 1000 // new data every second
+	}
+	Goto sendsonardata
+}
+
+QActor containermanager context ctxioport {
+	[#
+		val DFREE = 20.0
+		var containerCount = 0
+		
+		var allContainerLoaded = true
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color magenta
+		
+		subscribeTo sonarwrapper for distance
+		
+		println("$name: initialization complete") color magenta
+	}
+	Goto wait
+	
+	State wait {
+		println("$name: waiting for distances...") color magenta
+	}
+	Transition t0
+		whenEvent distance -> evaluatedistance
+		whenEvent stop -> halt
+		
+	State evaluatedistance {
+		printCurrentMessage color magenta
+		
+		onMsg(distance : distance(D)) {
+			[# var D = payloadArg(0).toDouble() #]
+			if [# containerCount < 3 #] {
+				if [# (D > 0) && (D < DFREE/2) #] {
+					[# containerCount += 1 #]
+				}
+				
+				autodispatch goToWait : goToWait(1)
+			} else {
+				if [# allContainerLoaded #] {
+					println("$name: new container waiting!") color magenta
+					
+					request cargoservice -m containerWaiting : containerWaiting($D)
+					
+					[# 
+						allContainerLoaded = false
+						containerCount = 0 
+					#]
+				}
+			}
+		}
+	}
+	Transition t1
+		whenMsg goToWait -> wait
+		whenReply containerLoaded -> allcontainerloaded
+		
+	State allcontainerloaded {
+		[# 
+			allContainerLoaded = true
+			containerCount = 0 
+		#] 
+	}
+	Goto wait
+		
+	State halt {
+		println("$name: STOPPED") color magenta
+	}
+	Transition t2
+		whenEvent resume -> wait
+}
+
+QActor alarmmanager context ctxioport {
+	[#
+		val DFREE = 20.0
+		var alarmCount = 0
+		var alarm = false
+	#]
+	
+	State init initial {
+		println("$name: STARTING...") color red
+		
+		subscribeTo sonarwrapper for distance	
+		
+		println("$name: initialization complete") color red
+	}
+	Goto wait
+	
+	State wait {
+		println("$name: waiting for distances...") color red
+	}
+	Transition t0
+		whenEvent distance -> evaluatedistance
+		
+	State evaluatedistance {
+		printCurrentMessage color red
+		
+		onMsg(distance : distance(D)) {
+			[# var D = payloadArg(0).toDouble() #]
+			
+			if [# alarm == false #] {
+				if [# alarmCount < 3 #] {
+					if [# D > DFREE #] {
+						[# alarmCount += 1 #]
+					} else {
+						[# alarmCount = 0 #]
+					}
+				} else {
+					println("$name: ALARM!") color red
+					
+					[# alarm = true #]
+					
+					emit stop : stop(1)
+					emit stop : stop(1)
+				}
+			} else {
+				if [# D <= DFREE #] {
+					println("$name: everything is ok!") color red
+					
+					[# 
+						alarmCount = 0
+						alarm = false 
+					#]
+					
+					emit resume : resume(1)
+					emit resume : resume(1)
+				}
+			}
+		}
+	}
+	Goto wait
+}
+
+QActor alarmdevice context ctxioport {
+	[# lateinit var p : Process #]
+	
+	State init initial {
+		println("$name: STARTING...") color red
+		
+		[# p = machineExec("python3 ledPython25Off.py") #]	
+		
+		subscribeTo alarmmanager for stop
+		subscribeTo alarmmanager for resume	
+		
+		println("$name: initialization complete") color red
+	}
+	Goto wait
+	
+	State wait {
+		println("$name: waiting for events...") color red
+	}
+	Transition t0
+		whenEvent stop -> turnledon
+		whenEvent resume -> turnledoff
+		
+	State turnledon {
+		println("$name: turning on the LED") color red
+		
+		[# 
+			if(p.isAlive()) {
+				p.destroy()
+			}
+			p = machineExec("python3 ledPython25On.py") 
+		#]
+	}
+	Goto wait
+	
+	State turnledoff {
+		println("$name: turning off the LED") color red
+		
+		[# 
+			if(p.isAlive()) {
+				p.destroy()
+			}
+			p = machineExec("python3 ledPython25Off.py") 
+		#]
+	}
+	Goto wait
+}
