@@ -172,9 +172,9 @@ task dovesiamo {
 
 distributions {
     main {
-        distributionBaseName = 'iss25maritimecargo_sprint3_cargoservicegui'
+        distributionBaseName = 'iss25maritimecargo_cargoservicegui'
         contents { 
-             from './iss25maritimecargo_sprint3_cargoservicegui.pl'
+             from './iss25maritimecargo_cargoservicegui.pl'
              from './sysRules.pl'
              from './facadeConfig.json'
         }

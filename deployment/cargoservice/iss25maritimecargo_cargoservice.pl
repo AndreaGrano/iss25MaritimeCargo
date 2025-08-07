@@ -1,6 +1,7 @@
 %====================================================================================
 % iss25maritimecargo_cargoservice description   
 %====================================================================================
+mqttBroker("localhost", "1883", "holdUpdated").
 request( getProductWeight, getProductWeight(PID) ).
 reply( productWeight, productWeight(Weight) ).  %%for getProductWeight
 request( getFreeSlot, getFreeSlot(V) ).
@@ -31,7 +32,6 @@ reply( holdStatus, holdStatus(P1,W1,P2,W2,P3,W3,P4,W4) ).  %%for getHoldStatus
 event( holdChanged, holdChanged(Slot,PID,Weight) ).
 %====================================================================================
 context(ctxcargoservice, "localhost",  "TCP", "8003").
-context(ctxcargoservicegui, "127.0.0.1",  "TCP", "8002").
 context(ctxbasicrobot, "127.0.0.1",  "TCP", "8020").
  qactor( basicrobot, ctxbasicrobot, "external").
   qactor( dbwrapper, ctxcargoservice, "it.unibo.dbwrapper.Dbwrapper").

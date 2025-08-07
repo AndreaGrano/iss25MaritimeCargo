@@ -1,4 +1,5 @@
 System iss25maritimecargo_cargoservicegui
+mqttBroker "localhost" : 1883 eventTopic "holdUpdated"
 
 Event stop			: stop(V)
 Event resume		: resume(V)
@@ -44,4 +45,5 @@ QActor qakholdwsserver context ctxcargoservicegui {
 			#]
 		}
 	}
+	Goto work
 }

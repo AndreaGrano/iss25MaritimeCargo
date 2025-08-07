@@ -1,4 +1,5 @@
 System iss25maritimecargo_cargoservice
+mqttBroker "localhost" : 1883 eventTopic "holdUpdated"
 
 // MESSAGES
 // cargoservice -> dbwrapper
@@ -57,7 +58,6 @@ Event	holdChanged			:	holdChanged(Slot, PID, Weight)
 
 // CONTEXTS
 Context ctxcargoservice	ip[host="localhost" port=8003]
-Context ctxcargoservicegui ip[host="127.0.0.1" port=8002]
 Context ctxbasicrobot	ip[host="127.0.0.1" port=8020]
 
 
