@@ -1,5 +1,6 @@
 System iss25maritimecargo_cargoservicegui
-mqttBroker "localhost" : 1883 eventTopic "holdUpdated"
+//mqttBroker "localhost" : 1883 eventTopic "holdUpdated"
+mqttBroker "mosquitto" : 1883 eventTopic "holdUpdated" // mosquittoalone in docker
 
 Event stop			: stop(V)
 Event resume		: resume(V)

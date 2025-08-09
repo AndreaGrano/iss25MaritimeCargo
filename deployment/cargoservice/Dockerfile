@@ -7,12 +7,13 @@ FROM eclipse-temurin:17.0.5_8-jre-focal
 
 ## ADD copies and extracts the distribution tar of the microservice
 ADD ./build/distributions/iss25maritimecargo_cargoservice-1.0.tar /
-# Copy hold's map files
-COPY ./*.bin ./
-COPY ./*.txt ./
 
 ## Setting the working directory
 WORKDIR /iss25maritimecargo_cargoservice-1.0/bin
+
+# Copy hold's map files
+COPY ./*.bin ./
+COPY ./*.txt ./
 
 ## Launch of the application at the start
 CMD ["bash", "iss25maritimecargo_cargoservice"]

@@ -15,11 +15,12 @@ import java.net.*;
 import java.util.*;
 
 public class HoldWSServer extends WebSocketServer {
-	private Interaction qak_connection = ConnectionFactory.createClientSupport(ProtocolType.tcp, "localhost", ""+8003);
+//	private Interaction qak_connection = ConnectionFactory.createClientSupport(ProtocolType.tcp, "localhost", ""+8003);
+	private Interaction qak_connection = ConnectionFactory.createClientSupport(ProtocolType.tcp, "cargoservice", ""+8003); // in docker
 	private List<WebSocket> websockets = new ArrayList<>();
 	
 	public HoldWSServer() {
-		super(new InetSocketAddress("localhost", 8011));
+		super(new InetSocketAddress("0.0.0.0", 8011));
 	}
 
 	@Override

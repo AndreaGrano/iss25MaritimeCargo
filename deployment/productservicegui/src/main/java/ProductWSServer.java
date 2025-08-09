@@ -16,11 +16,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ProductWSServer extends WebSocketServer {
-	private Interaction qak_connection = ConnectionFactory.createClientSupport(ProtocolType.tcp, "localhost", ""+8001);
+//	private Interaction qak_connection = ConnectionFactory.createClientSupport(ProtocolType.tcp, "localhost", ""+8001);
+	private Interaction qak_connection = ConnectionFactory.createClientSupport(ProtocolType.tcp, "productservice", ""+8001); // in docker
 	private List<WebSocket> websockets = new ArrayList<>();
 	
 	public ProductWSServer() {
-		super(new InetSocketAddress("localhost", 8013));
+		super(new InetSocketAddress("0.0.0.0", 8013));
 	}
 
 	@Override

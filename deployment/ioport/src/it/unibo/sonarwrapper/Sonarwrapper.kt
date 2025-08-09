@@ -39,7 +39,7 @@ class Sonarwrapper ( name: String, scope: CoroutineScope, isconfined: Boolean=fa
 						CommUtils.outmagenta("$name: STARTING...")
 						
 									try {
-										p = Runtime.getRuntime().exec("python3 sonar.py")
+										p = Runtime.getRuntime().exec("python sonar.py")
 										reader = BufferedReader(InputStreamReader(p.getInputStream()))
 									} catch(e : Exception) {
 										println("sonarwrapper sonarStart ERROR: $e")
@@ -59,12 +59,12 @@ class Sonarwrapper ( name: String, scope: CoroutineScope, isconfined: Boolean=fa
 										var V = reader.readLine()
 										if(V != null) {
 											val payload = "distance( ${V} )"
-											val event = MsgUtil.buildEvent("sonarwrapper", "distance", payload)
+											val event = MsgUtil.buildEvent("sonardevice", "sonardata", payload)
 											
 											emitLocalStreamEvent(event)
 										}
 									} catch(e : Exception) {
-										println("sonarwrapper sendSonarData ERROR: $e")
+										println("sonardevice sendSonarData ERROR: $e")
 									}
 						delay(1000) 
 						//genTimer( actor, state )

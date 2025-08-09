@@ -1,5 +1,6 @@
 System iss25maritimecargo_cargoservice
-mqttBroker "localhost" : 1883 eventTopic "holdUpdated"
+//mqttBroker "localhost" : 1883 eventTopic "holdUpdated"
+mqttBroker "mosquitto" : 1883 eventTopic "holdUpdated" // mosquittoalone in docker
 
 // MESSAGES
 // cargoservice -> dbwrapper
@@ -24,7 +25,7 @@ Reply	loadRejected		:	loadRejected(Reason) for loadProduct
 Dispatch goToWait			:	goToWait(V)
 
 // cargorobot -> BasicRobot
-Request engage        : engage(OWNER, STEPTIME)	
+Request engage        : engage(OWNER, STEPTIME)
 Reply   engagedone    : engagedone(ARG)    for engage
 Reply   engagerefused : engagerefused(ARG) for engage
 
@@ -58,8 +59,8 @@ Event	holdChanged			:	holdChanged(Slot, PID, Weight)
 
 // CONTEXTS
 Context ctxcargoservice	ip[host="localhost" port=8003]
-Context ctxbasicrobot	ip[host="127.0.0.1" port=8020]
-
+//Context ctxbasicrobot	ip[host="127.0.0.1" port=8020]
+Context ctxbasicrobot	ip[host="basicrobot24" port=8020] // basicrobot24 in docker
 
 // ACTORS
 ExternalQActor basicrobot context ctxbasicrobot

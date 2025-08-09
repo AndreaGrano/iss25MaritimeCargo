@@ -15,7 +15,7 @@ function HoldPage() {
     const socketRef = useRef(null);
 
     useEffect(() => {
-        const socket = new WebSocket('ws://localhost:8011');
+        const socket = new WebSocket('ws://127.0.0.1:8011');
         socketRef.current = socket;
 
         socket.onopen = () => {

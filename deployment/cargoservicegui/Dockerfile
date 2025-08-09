@@ -8,6 +8,9 @@ FROM eclipse-temurin:17.0.5_8-jre-focal
 ## ADD copies and extracts the distribution tar of the microservice
 ADD ./build/distributions/iss25maritimecargo_cargoservicegui-1.0.tar /
 
+# Expose the port used by the WebSocket
+EXPOSE 8011
+
 ## Setting the working directory
 WORKDIR /iss25maritimecargo_cargoservicegui-1.0/bin
 

@@ -1,0 +1,73 @@
+#version: '...' no longer usefull
+
+services:
+  
+  cargoservice:
+    #container_name: iss25maritimecargo.cargoservice
+    #image: cargoservice:1.0         # if an image has already been created
+    build:                           # if an image needs to be created
+      dockerfile: Dockerfile
+      context: cargoservice/
+    ports:
+      - 8003:8003
+    networks:
+      - iss-network
+
+  cargoservicegui:
+    #container_name: iss25maritimecargo.cargoservicegui
+    #image: cargoservicegui:1.0
+    build:
+      dockerfile: Dockerfile
+      context: cargoservicegui/
+    ports:
+      - 8011:8011
+    depends_on:
+      cargoservice:
+        condition: service_started
+        restart: true
+    networks:
+      - iss-network
+
+  cargoservicegui_react:
+    #container_name: iss25maritimecargo.cargoservicegui_react
+    #image: cargoservicegui_react:1.0
+    build:
+      dockerfile: Dockerfile
+      context: cargoservicegui_react/
+    ports:
+      - 3000:3000
+    depends_on:
+      cargoservicegui:
+        condition: service_started
+        restart: true
+
+  productservice:
+    #container_name: iss25maritimecargo.productservice
+    #image: productservice:1.0
+    build:
+      dockerfile: Dockerfile
+      context: productservice/
+    ports:
+      - 8001:8001
+
+  productservicegui:
+    #container_name: iss25maritimecargo.productservicegui
+    #image: productservicegui:1.0
+    build:
+      dockerfile: Dockerfile
+      context: productservicegui/
+    ports:
+      - 8013:8013
+    depends_on:
+      productservice:
+        condition: service_started
+        restart: true
+
+
+networks:
+  iss-network:
+    external: true
+
+
+## docker-compose -p iss25maritimecargo -f iss25maritimecargo.yaml up
+## docker-compose -p iss25maritimecargo -f iss25maritimecargo.yaml up --build (last option to rebuild images in case of changes)

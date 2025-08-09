@@ -154,9 +154,9 @@ task dovesiamo {
 
 distributions {
     main {
-        distributionBaseName = 'iss25maritimecargo_ioport'
+        distributionBaseName = 'iss25maritimecargo_sprint2_ioport'
         contents { 
-             from './iss25maritimecargo_ioport.pl'
+             from './iss25maritimecargo_sprint2_ioport.pl'
              from './sysRules.pl'
              from './facadeConfig.json'
         }
