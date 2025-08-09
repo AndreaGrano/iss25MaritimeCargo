@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ISS Final Project - Maritime Cargo</title>
+  <link rel="stylesheet" href="./style/style.css">
+</head>
+<body>
+  <h1>ISS Final Project - Maritime Cargo</h1>
+  <a href="https://github.com/anatali/issLab2025/blob/main/iss25Material/docs/_build/html/TemaFinale25.html">Final exam theme a.a. 2024/2025</a>
+  <hr>
+  <div id="toc">
+    <h2>Index</h2>
+    <ul id="toc-list"></ul>
+  </div>
+  <h2>1. Introduction</h2>
+  <p> 
+    A Maritime Cargo shipping company intends to automate the operations of load of 
+    freight in the ship’s cargo hold. To this end, the company plans to employ a 
+    Differential Drive Robot for the loading of goods in the ship's hold.
+  </p>
+
+  <h3>1.1 Our motto</h3>
+  <p>
+    <blockquote>There is no code without a project, 
+    there is no project without <b><u>problem analysis</u></b>, 
+    there is no problem without requirements.</blockquote>
+  </p>
+
+  <h3>1.2 Final architecture from sprint3</h3>
+  <div class="image-container">
+    <img width="90%" alt="logicalArchitecture" title="logicalArchitecture" src="./img/model3_1.png">  
+    <div class="caption">Figure 0 – Final architecture</div>
+  </div>
+
+  <h3>1.3 Aim</h3>
+  <p>
+    The aim of this phase is to finally deploy the projecy in a user-friendly way, so that the customer (or whoever wants to) can utilize it with just a few clicks.
+  </p>
+
+  <h2>2. Problem analysis</h2>
+  <p>
+    The Maritime Cargo system consists of a number of microservices, possibly distributed across some nodes in a network. Some of those have dependencies on others, i.e. the <span class="keyword-other">guis</span> depends on core systems (<span class="keyword">productservice</span> and <span class="keyword">cargoservice</span>) in order to operate.<br>
+    Therefore, we want a way to:
+    <ul>
+      <li>test the <span class="keyword-other">distributed nature</span> of the system</li>
+      <li>automate the correct start of the system, taking into account <span class="keyword-other">dependencies</span> where needed</li>
+      <li>possibly be <span class="keyword-other">OS and hardware agnostic</span>, so that Maritime Cargo can be run on any machine</li>
+    </ul>
+  </p>
+  
+  <h3>2.1 Docker</h3>
+  <div class="image-container">
+    <a href="https://www.docker.com/"><img width="90%" alt="docker" title="docker" src="./img/Docker.png"></a>  
+    <div class="caption">Figure 1 – Docker</div>
+  </div>
+  <p>
+    Docker is arguably the most popular software when it comes to deployment and tests of applications, tipically in environments that follow the <span class="keyword-other">CI/CD (Continuous Integration/Continuous Delivery)</span> software engineering practice.
+    It utilizes OS-level virtualization in order to package applications and all their dependencies in software entities called <span class="keyword">images</span>; when an istance of an image is executed it is called a <span class="keyword">container</span>.
+    Those containers are isolated from one another during execution, resource wise, and can communicate with each other or the host via networks that can be configured and managed inside Docker.
+    The software that hosts and manages containers is called <span class="keyword">Docker Engine</span>.
+  </p>
+
+  <blockquote>Question: why Docker?</blockquote>
+  <p>
+    At a first glance, all the exposed functionality can be achieved using virtual machines, but one have to consider that VMs are indeed very heavy, whereas containers are lightweight; this means that several containers can run simultaneously on the same machine.
+    In our case, in order to carry out an overall test of the system, we will have to run up to eight different microservices, therefore using Docker will be appropriate.
+    Also, the Docker Engine ensures that the system, in all its components, will run indipendently of the OS and the hardware the customer utilizes.<br>
+    An image can be created using the command line, but the operation can be standardized using <span class="keyword">Dockerfiles</span>, i.e. text documents containing instructions, one per line, in the form of keywords followed by arguments.
+    The documentation can be found <a href="https://docs.docker.com/reference/dockerfile/">here</a>.
+  </p>
+
+  <blockquote>Problem: correctly run a multi-container system</blockquote>
+  <p>
+    The Maritime Cargo system will be composed of many containers that will need to be correctly instatiated, started, considering dependencies, and interconnected.
+    To this end, Docker provides a tool called <a href="https://docs.docker.com/compose/">Docker Compose</a>. It is configured using <span class="keyword-other">YAML</span> files and will enable the possibility of an almost "single-click" boot of the core system from the user perspective.
+  </p>
+
+  <blockquote>Problem: how will the services find each other in order to communicate?</blockquote>
+  <p>
+    While the system was deployed on the same machine, except for the ioport subsystem, all the software components were using the localhost address in order to communicate; obviously, since they will be distributed, this can no longer be the case.
+    To this end, Docker has an internal <span class="keyword-other">DNS system</span> that translates the names of the containers to their rescpective IP addresses, therefore the various "localhost" have been replaced with the name of the context to connect with.
+  </p>
+
+  <h2>3. Project</h2>
+  <h3>3.1 Preliminary phase</h3>
+  <p>
+    In order to write a more clean Dockerfile, every subproject will be preliminary packaged in a tar file using the <code>gradlew disTar</code> command.
+    The <code>ADD</code> instruction in the Dockerfile will copy and automatically extract the tar file in the specified path of the container's file system.
+  </p>
+
+  <h3>3.2 Dockerfiles</h3>
+  <p>
+    There are five Dockerfiles, one for every sub-project:
+    <ul>
+      <li><a href="../cargoservice/Dockerfile">cargoservice</a></li>
+      <li><a href="../cargoservicegui/Dockerfile">cargoservicegui</a></li>
+      <li><a href="../cargoservicegui_react/Dockerfile">cargoservicegui_react</a></li>
+      <li><a href="../productservice/Dockerfile">productservice</a></li>
+      <li><a href="../productservicegui/Dockerfile">productservicegui</a></li>
+    </ul>
+
+    All of them have approximately the same format, consisting of the following operations:
+    <ul>
+      <li>a lightweight base image is adopted and downloaded</li>
+      <li>the tar file of the sub-project is copied and extract in place</li>
+      <li>if necessary, additional files are also copied (e.g. hold's map configuration files for cargoservice)</li>
+      <li>the working directory is set</li>
+      <li>a final command ennsures the software is started at startup</li>
+    </ul>
+
+    Every image can be indipendently created with the<br>
+    <code>docker build -t <i>name</i>:<i>version</i> .</code><br>
+    command exectued in the same directory of the Dockerfile, but an overall build of the system is achieved using Docker Compose.
+  </p>
+
+  <h3>3.3 Docker Compose</h3>
+  <p>
+    For the purpose of managing the multiple containers the system is made of, a <a href="../iss25maritimecargo.yaml">iss25maritimecargo.yaml</a> file has been written.
+    By default, it is configured to build the images of the five containers, it specifies the mapping of the ports so that the packets sent to those ports of the host machine are redirected to the right containers and it explicit the dependencies, so that the guis are effectively started after the core system.<br>
+    In order to load and start the <span class="keyword">Maritime Cargo</span> system the following command can be launched from the same directory of the yaml file (which needs to be the parent of the directories of the sub-projects, so that Docker Compose can also find the various Dockerfiles). 
+  </p>
+
+  <h2>4. How to boot the system from scratch</h2>
+  <p>
+    In order to boot the Maritime Cargo system the following operations must be done:
+    <ol>
+      <li>
+        For every sub-project, create the distribution tar/zip using the command:<br>
+        <code>gradlew disTar</code><br>
+        Those files will be created in the build/distributions directory of the projects.
+      </li>
+      <li>
+        If it has not already been done (it can be verified with <code>docker network ls</code>), create the iss-network network used by basicrobot24, mosquitto, cargoservice and cargoservicegui to communicate inside docker using the command:<br>
+        <code>docker network create iss-network</code>
+      </li>
+      <li>
+        Start docker and launch the three containers given by the customer, in the following order:
+        <ol>
+          <li><span class="keyword">mosquitto</span></li>
+          <li><span class="keyword">wenv</span></li>
+          <li><span class="keyword">baricrobot24</span></li>
+        </ol>
+      </li>
+      <li>
+        Open a terminal in the directory where the iss25maritimecargo.yaml file is and launch the command:<br>
+        <code>docker-compose -p iss25maritimecargo -f iss25maritimecargo.yaml up --build</code><br>
+        The <code>--build</code> ensures that the container are rebuilt if any changes has been made (or it is the first time, of course); in other scenarios it can be omitted
+      </li>
+      <li>
+        Connect every physical component to the RaspberryPi as it has been described in the <a href="../ioport/userDocs/DeSimoni-Grano-LoBuglio_sprint2_v1.html#43-physical-implementation">ioport documentation</a>
+      </li>
+      <li>
+        Copy the distribution tar or zip file of the <span class="keyword">ioport</span> sub-system in the RaspberryPi file system and decompress it; 
+        also copy the three python scripts (i.e. <a href="../ioport/src/main/resources/sonar.py">sonar.py</a>, <a href="../ioport/src/main/resources/ledPython25On.py">ledPython25On.py</a> and <a href="../ioport/src/main/resources/ledPython25Off.py">ledPython25Off.py</a>)
+        in the bin directory (e.g. all of that can be done using the <span class="keyword-other">scp</span> command)
+      </li>
+      <li>
+        In the bin directory of the decompressed files on the RaspberryPi launch the bash script <span class="keyword">iss25maritimecargo_ioport</span>
+      </li>
+      <li>
+        Open a browser and connect to localhost:3000 to see the <span class="keyword">status of the hold</span> and/or submit a <span class="keyword">load request</span> or open the HTML pages that can be found <a href="../productservicegui/src/main/resources/">here</a> to create or delete product
+      </li>
+      <li>
+        <span class="keyword">Enjoy the Maritime Cargo experience!</span>
+      </li>
+    </ol>
+  </p>
+
+  <h2>Developing Team</h2>
+  <div class="team">
+    <div class="member">
+      <img src="./img/profilePictures/andreagrano.jpg" alt="Andrea Grano">
+      <div class="member-name">Andrea Grano</div>
+      <div class="member-role">0900087513</div>
+      <a href="mailto:andrea.grano@studio.unibo.it">andrea.grano@studio.unibo.it</a>
+    </div>
+  </div>
+  <script src="./script/index.js"></script>
+</body>
+</html>
+

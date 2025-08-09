@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ISS Final Project - Maritime Cargo</title>
+  <link rel="stylesheet" href="./style/style.css">
+</head>
+<body>
+  <h1>ISS Final Project - Maritime Cargo</h1>
+  <a href="https://github.com/anatali/issLab2025/blob/main/iss25Material/docs/_build/html/TemaFinale25.html">Final exam theme a.a. 2024/2025</a>
+  <hr>
+  <div id="toc">
+    <h2>Index</h2>
+    <ul id="toc-list"></ul>
+  </div>
+  <h2>1. Introduction</h2>
+  <p> 
+    A Maritime Cargo shipping company intends to automate the operations of load of 
+    freight in the ship’s cargo hold. To this end, the company plans to employ a 
+    Differential Drive Robot for the loading of goods in the ship's hold.
+  </p>
+
+  <h3>1.1 Our motto</h3>
+  <p>
+    <blockquote>There is no code without a project, 
+    there is no project without <b><u>problem analysis</u></b>, 
+    there is no problem without requirements.</blockquote>
+  </p>
+
+  <h3>1.2 Model architecture from sprint1</h3>
+  <div class="image-container">
+    <img width="90%" alt="logicalArchitecture" title="logicalArchitecture" src="../../../sprint1/userDocs/img/model1_2.png">  
+    <div class="caption">Figure 0 – Model architecture</div>
+  </div>
+
+  <h3>1.3 Aims of sprint2</h3>
+  <p>
+    The aims of the current sprint are:
+    <ul>
+      <li><a href="../../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v2.html#ioport">Design and implementation of the ioport management and product delivery by <span class="keyword">cargorobot</span></a></li>
+      <li>Testing of the implemented model</li>
+    </ul>
+  </p>
+
+  <h2>2. Requirements formalization</h2>
+  <p>
+    Within this sprint, we will be focusing on the requirements 
+    <a href="../../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf5">RF5</a>,
+    <a href="../../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf6">RF6</a>,
+    <a href="../../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf11">RF11</a> and
+    <a href="../../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf12">RF12</a>.
+
+    The starting point of the current sprint are the following tables, resulting from the requirement analysis from sprint0:
+    <ul>
+      <li><a href="../../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v2.html#entities">Entities</a></li>
+      <li><a href="../../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v2.html#data">Data</a></li>
+      <li><a href="../../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v2.html#messages">Messages</a></li>
+    </ul>
+    </p>
+
+  </p>
+
+  <h3>2.4 Working area</h3>
+  <p>The robot will move around the following working area:</p>
+  <div class="image-container">
+    <img src="./img/workingarea.png" alt="Working area">
+    <div class="caption">Figure 1 – Working area</div>
+  </div>
+  <p>The relevant areas are:
+    <ul>
+        <li><span style="color:#df4143">HOME</span>: upper left corner in which the robot has to stay when it's in idle</li>
+        <li><span style="color:#4c7cc3">ioport</span>: opening in the lower left border from which the robot retrieves the containers</li>
+        <li><span style="color:#ba67ca">slot{1..4}</span>: they're the designated areas where the robot has to leave the containers</li>
+        <li><span style="color:#ba67ca">slot5</span>: permanently occupied area that the robot has to avoid</li>
+    </ul>
+  </p>
+
+  <h2>3. Problem analysis</h2>
+  <h3>3.1 Placing a product in the hold</h3>
+  The following steps describe the typical sequence of actions that occur when a 
+  <span class="keyword">loadRequest</span> is received for a product to be placed in the ship’s hold:
+  <ol>
+    <li>
+      A <span class="keyword">loadRequest</span> is issued to the 
+      <span class="keyword">cargoservice</span> for a specific product to be stored in the ship's hold.
+    </li>
+    <li>
+      The <span class="keyword">cargoservice</span> verifies with the 
+      <span class="keyword">productservice</span> whether the product has been registered.<br>
+      NB: Registration of a product does not imply that a load request must be issued. 
+      It is possible that no load request will ever be created for a registered product.
+    </li>
+    <li>
+      If the product is registered, it requests an available slot to be assigned.
+    </li>
+    <li>
+      When <span class="keyword">sonar sensor</span> detects that the a new product has arrived at the <span class="keyword">ioport</span>, 
+      i.e. when the sensor measures a distance D &lt; DFREE/2 for a reasonable duration (i.e., 3 seconds),
+      it signals it to <span class="keyword">cargoservice</span>.
+    </li>
+    <li id="cargorobot-steps">
+      Once detected, <span class="keyword">cargoservice</span> send to the <span class="keyword">cargorobot</span> the slot where to put the container.
+      Starting from its HOME position, <span class="keyword">cargorobot</span>, picks up the product at the <span class="keyword">ioport</span>, delivers it to the assigned slot, 
+      unloads it, and returns to HOME.
+    </li>
+  </ol>
+  Any new load request received during the above steps are queued and processed only after the robot has returned to its HOME position.
+
+  <h3>3.2 Special cases</h3>
+  <p>
+    While the standard procedure ensures smooth product placement in the hold, 
+    several exceptional scenarios must be considered to guarantee system robustness, 
+    reliability, and safety. 
+    This section outlines the key exceptions that may occur during the handling of a <span class="keyword">loadRequest</span>, 
+    along with the expected system behavior in each case.
+  </p>
+  <h4>3.2.1 Unregistered product</h4>
+  <b>Scenario</b>: a <span class="keyword">loadRequest</span> of an unregistered product is done. <br>
+  <b>System reaction</b>: the <span class="keyword">loadRequest</span> is rejected by <span class="keyword">cargoservice</span>.
+  <h4>3.2.2 Unavailable slots</h4>
+  <b>Scenario</b>: unavailable slots. <br>
+  <b>System reaction</b>: the <span class="keyword">loadRequest</span> is rejected by <span class="keyword">cargoservice</span>.
+  <h4>3.2.3 System failure</h4>
+  <b>Scenario</b>: a distance D &gt; DFREE is registered by the <span class="keyword">sonar sensor</span> for a reasonable time (i.e. 3s) <br>
+  <b>System reaction</b>: the system stop itself and turn on a LED until a distance D &le; DFREE is registered, 
+  then it starts working again. <br>
+  All the request done during the "stopped-period" are queued.
+
+  <h3>3.3 Software provided by the customer</h3>
+  The customer gives us the following already implemented softwares, which are useful for this sprint:
+  <ul>
+    <li>
+      <a href="https://github.com/anatali/issLab2025/tree/main/sonarLed2025/resources/python">RaspberryPi utility software</a>
+    </li>
+    <li>
+      <a href="https://github.com/anatali/issLab2025/tree/8789bc1ec22bed8ce3cda499ef08cc77840cc900/sonarLed2025">SonarLed2025</a> 
+      - a software already implemented and usable which
+      allows to get the distance from the sonar and to blink a LED
+    </li>
+  </ul>
+
+  <h3>3.4 Logical architecture</h3>
+  <p>After the problem analysis the following is the logical architecture.</p>
+  <div class="image-container">
+    <img width="90%" alt="logicalArchitecture" title="logicalArchitecture" src="./img/model2_1.png">  
+    <div class="caption">Figure 2 – Logical architecture</div>
+  </div> <br>
+
+  <a href="../src/logArch.qak">Qak model</a> of the logical architecture.
+
+
+  <h2>4. Project</h2>
+  <p>
+    We think it's better for this sprint realization to divide implementation into the following parts:
+    <ul>
+      <li><a href="#part-1">Part 1</a>: sonar sensor implementation</li>
+      <li><a href="#part-2">Part 2</a>: delivering operation</li>
+    </ul>
+  </p>
+
+  <h3 id="part-1">4.1 Part 1: sonar sensor implementation</h3>
+  <p>
+    To interface with the data produced by <span class="keyword">sonar sensor</span>, the system requires a set of 
+    specialized software components, each responsible for a distinct aspect of interaction and control. <br>
+    These entities collectively ensure correct detection of container presence at the <span class="keyword">ioport</span> and 
+    system fault monitoring. <br>
+    So, we implemented the following Actors:
+    <ul>
+      <li>
+        <b><span class="keyword">sonarWrapper</span></b>:
+        this is the software component which reads distances from a text file produced by the program <a href="https://github.com/anatali/issLab2025/blob/main/sonarLed2025/resources/python/sonar.py">sonar.py</a>
+        (given by the customer) which is the only piece of software that interracts with the <span class="keyword">sonar sensor</span>.
+        It performs periodic sampling of the measured distance (once every second) and emits distance update events. 
+        These events are forwarded to the <span class="keyword">containerManager</span> and <span class="keyword">alarmDevice</span> for analysis.<br>
+        The Python script (above) abstracts the hardware-specific communication, allowing the rest of the system to remain <span class="keyword-other">hardware-agnostic</span>.
+      </li>
+      <li>
+        <b><span class="keyword">containerManager</span></b>:
+        this is the <span class="keyword">ioport</span> core logic entity responsible for processing distance 
+        measurements. It evaluates if a container is present at the 
+        <span class="keyword">ioport</span> (when the distance D &lt; DFREE/2 for a stable, predefined duration).
+      </li>
+      <li>
+        <span class="keyword">alarmDevice</span>:
+        this component receive distances from the <span class="keyword">sonarWrapper</span> and when D &gt; DFREE for 3 seconds, it sends a 
+        <span class="keyword">stop</span> event to <span class="keyword">cargoservice</span>. It also tells to <a href="https://github.com/anatali/issLab2025/blob/main/sonarLed2025/resources/python/ledPython25On.py">ledPython25On.py</a>
+        (given by the customer) to turn on the led. 
+        When the sistem failure is solved it sends a <span class="keyword">resume</span> event to <span class="keyword">cargoservice</span>
+        and tells to <a href="https://github.com/anatali/issLab2025/blob/main/sonarLed2025/resources/python/ledPython25Off.py">ledPython25Off.py</a>
+        to turn off the led.
+        As above, <a href="https://github.com/anatali/issLab2025/blob/main/sonarLed2025/resources/python/ledPython25On.py">ledPython25On.py</a> and <a href="https://github.com/anatali/issLab2025/blob/main/sonarLed2025/resources/python/ledPython25Off.py">ledPython25Off.py</a>
+        are the only piece of software wich interracts with physical LED.
+      </li>
+    </ul><br>
+  </p>
+
+  <h3 id="part-2">4.2 Part 2: delivering operation</h3>
+  In this sprint, the focus shifts to implementing the delivery workflow for the <span class="keyword">cargorobot</span>, which is responsible for transporting 
+  a container from the <span class="keyword">ioport</span> to an assigned slot. <br>
+  The pathfinding and map management logic was already completed in <a href="../../../sprint1/userDocs/DeSimoni-Grano-LoBuglio_sprint1_v1.html#part-1">Sprint 1</a>.
+  The software implementation follows what specified in <a href="#cargorobot-steps">point 5 of paragraph 3.1</a>.
+
+  <h3>4.3 Physical implementation</h3>
+  For the physical implementation of the sonar we used a <a href="https://cdn.sparkfun.com/datasheets/Sensors/Proximity/HCSR04.pdf"><span class="keyword-other">HC-SR04</span> sonar sensor</a>.
+  <div class="image-container">
+    <img width="90%" alt="HC-SR04" title="HC-SR04" src="./img/HC-SR04.webp">  
+    <div class="caption">Figure 3 – Sensor HC-SR04</div>
+  </div> <br>
+  We connected it to a RaspberryPi GPIO and it is controlled by the means of the Python script <a href="https://github.com/anatali/issLab2025/blob/main/sonarLed2025/resources/python/sonar.py">sonar.py</a>.
+  We also connected the LED to the Raspberry Pi GPIO.<br>
+  Here is the detail of links between Raspberry Pi GPIO and physical components:
+  <pre><code><b>HC-SR04 sonar's connections</b>:<ul><li>VCC : physical pin 4 (+5V)</li><li>GND : physical pin 6 (GND)</li><li>TRIG: physical pin 11 (WPI 0, BCM 17)</li><li>ECHO: physical pin 13 (WPI 2, BCM 27)</li></ul><br><b>LED's connections</b>:<ul><li>Anode: physical pin 22 (WPI 6, BCM 25)</li><li>Catode: physical pin 20 (GND)</li></ul></code>
+  </pre>
+  <div class="image-container">
+    <img width="90%" alt="physical model" title="physical model" src="./img/physicalDesign.png">  
+    <div class="caption">Figure 4 – Physical model</div>
+  </div> <br>
+
+  <h3>4.4 Messages</h3>
+  We add the following messages:
+  <table id="messages">
+    <tr>
+      <th>Messages</th>
+      <th>Type</th>
+      <th>Sender</th>
+      <th>Receiver</th>
+      <th>Description</th>
+    </tr>
+    <tr>
+      <td><span class="keyword">distance</span></td>
+      <td>Event</td>
+      <td>sonarWrapper</td>
+      <td>-</td>
+      <td>The distance mesured by the ioport (send each second)</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">stop</span></td>
+      <td>Event</td>
+      <td>alarmDevice</td>
+      <td>-</td>
+      <td>System must stop because of a system failure</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">resume</span></td>
+      <td>Event</td>
+      <td>alarmDevice</td>
+      <td>-</td>
+      <td>System can resume because system failure is solved</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">containerwaiting</span></td>
+      <td>Request</td>
+      <td>containerManager</td>
+      <td>cargoservice</td>
+      <td>There is a container waiting to be loaded at the ioport, cargoservice needs to be informed</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">containerloaded</span></td>
+      <td>Reply</td>
+      <td>cargoservice</td>
+      <td>containerManager</td>
+      <td>The container that was waiting to be loaded at the ioport has been correctly delivered to its assigned slot. After beeing notified by cargorobot, cargoservice tells it to containerManager</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">dodelivery</span></td>
+      <td>Request</td>
+      <td>cargoservice</td>
+      <td>cargorobot</td>
+      <td>cargoservice, informed by containerManager with containerwaiting, orders cargorobot to load the container waiting 
+        at the ioport and to deliver it to the assigned slot</td>
+    </tr>
+    <tr>
+      <td><span class="keyword">deliverydone</span></td>
+      <td>Reply</td>
+      <td>cargorobot</td>
+      <td>cargoservice</td>
+      <td>The container has been delivered correctly and the cargorobot has got back to its HOME position</td>
+    </tr>
+  </table>
+
+  <h3>4.5 System stop behavior</h3>
+  <p>
+    When a stop message is emitted due to a system fault caused by unexpected <span class="keyword">sonar sensor</span> data readings, 
+    the system enters in a controlled stopped state. <br>
+    <span class="keyword">cargoservice</span> and <span class="keyword">containerManager</span> are notified to stop by a <span class="keyword">stop</span> message
+    emitted by <span class="keyword">alarmDevice</span>.<br>
+    We decide not to notify <span class="keyword">cargorobot</span> with a <span class="keyword">stop</span> message because we can have these two scenarios:
+    <ul>
+      <li>
+        <b><span class="keyword">cargorobot</span>is IDLE at HOME</b>:
+        If the stop condition occurs while <span class="keyword">cargorobot</span> is at its HOME position and has not received 
+        a <span class="keyword">dodelivery</span>, no action is required since <span class="keyword">cargoservice</span> has been stopped.<br>
+        The robot will remain idle at HOME and will not receive any new commands while the system is stopped.
+      </li>
+      <li>
+        <b><span class="keyword">cargorobot</span>is executing a delivery</b>:
+        If the system stop condition is triggered after the <span class="keyword">dodelivery</span> message 
+        has been sent to the <span class="keyword">cargorobot</span>, the entire delivery process is considered 
+        atomic and non-interruptible.<br>
+        Since the container is assumed to be present at the <span class="keyword">ioport</span> once a 
+        <span class="keyword">dodelivery</span> message is issued, it is essential that the <span class="keyword">cargorobot</span> 
+        completes the operation.<br>
+        Once the delivery is completed and the <span class="keyword">cargorobot</span> returns to HOME, 
+        it naturally returns to the IDLE state, which aligns with the expected behavior under a system stop condition.
+      </li>
+    </ul>
+  </p>
+
+  <h3>4.6 Logical architecture</h3>
+  <p>The following is the finale logical architecture.</p>
+  <div class="image-container">
+    <img width="90%" alt="logicalArchitecture" title="logicalArchitecture" src="./img/model2_2.png">  
+    <div class="caption">Figure 5 – Logical architecture</div>
+  </div>
+
+  <h2>5. Test plans</h2>
+  <table>
+    <tr>
+      <th>Test</th>
+      <th>Involved Actors</th>
+      <th>Description</th>
+      <th>Files</th>
+    </tr>
+    <tr>
+      <td><b>Stop & resume</b></td>
+      <td>
+        <ul>
+          <li>alarmDevice</li>
+          <li>sonarWrapper</li>
+          <li>cargoservice</li>
+        </ul>
+      </td>
+      <td>This test verifies that the systems correctly reacts to both stop & resume events</td>
+      <td>
+        Qak: <a href="../src/test_stopresume.qak">test_stopresume.qak</a><br>
+      </td>
+    </tr>
+    <tr>
+      <td><b>Delivery operation</b></td>
+      <td>
+        <ul>
+          <li>containerManager</li>
+          <li>sonarWrapper</li>
+          <li>cargoservice</li>
+          <li>cargorobot</li>
+        </ul>
+      </td>
+      <td>
+        This test verifies that the delivery of a container to its assigned slot is done correctly
+      </td>
+      <td>
+        Qak: <a href="../src/test_delivery.qak">test_delivery.qak</a><br>
+      </td>
+    </tr>
+  </table>
+
+  <h2>6. Conclusions</h2>
+  During this sprint, we successfully completed the implementation of all functionalities related to the <span class="keyword">ioport</span> 
+  management and the container delivery process to the assigned slots.
+  Specifically, the following objectives were achieved:
+  <ul>
+    <li>realization of dedicated components to read and analize data produced by the <span class="keyword">sonar sensor</span>
+      (<span class="keyword">sonarWrapper</span>, <span class="keyword">containerManager</span>, and <span class="keyword">alarmDevice</span>).</li>
+    <li>accurate detection of product presence at the <span class="keyword">ioport</span> and real-time handling 
+      of system failure conditions triggered by <span class="keyword">sonar sensor</span> anomalies.</li>
+    <li>implementation of the <span class="keyword">cargorobot</span> logic for performing automated container pickup and delivery, 
+      including movement from HOME to <span class="keyword">ioport</span>, delivery to the assigned slot, 
+      unloading, and returning to HOME.</li>
+  </ul>
+  In addition, we developed and verified all mechanisms for system suspension and resume based on <span class="keyword">sonar sensor</span> 
+  input, ensuring compliance with safety requirements (<a href="../../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf11">RF11</a> and
+  <a href="../../../sprint0/userDocs/DeSimoni-Grano-LoBuglio_sprint0_v1.html#rf12">RF12</a>). <br>
+  All components were fully tested, both individually and as part of end-to-end system flows, 
+  and the sprint goals were completed within the planned timeframe.<br>
+  This sprint represents a significant milestone toward a fully autonomous and sensor-driven cargo handling system.<br>
+  This sprint laid the foundation for the next development phase, which is:
+  <ol>
+    <li><b>Sprint3 - web-gui</b></li>
+  </ol>
+
+  The following one is the updated workplan:
+  <table>
+    <tr>
+      <th>Sprint</th>
+      <th>Start</th>
+      <th>End</th>
+      <th>Man-hours</th>
+    </tr>
+    <tr>
+      <td>Sprint3</td>
+      <td>21/07/2025</td>
+      <td>24/07/2025</td>
+      <td>11</td>
+    </tr>
+  </table>
+
+  <h2>Developing Team</h2>
+  <div class="team">
+    <div class="member">
+      <img src="./img/profilePictures/clarissadesimoni.jpg" alt="Clarissa De Simoni">
+      <div class="member-name">Clarissa De Simoni</div>
+      <div class="member-role">0001139600</div>
+      <a href="mailto:clarissa.desimoni@studio.unibo.it">clarissa.desimoni@studio.unibo.it</a>
+    </div>
+    <div class="member">
+      <img src="./img/profilePictures/andreagrano.jpg" alt="Andrea Grano">
+      <div class="member-name">Andrea Grano</div>
+      <div class="member-role">0900087513</div>
+      <a href="mailto:andrea.grano@studio.unibo.it">andrea.grano@studio.unibo.it</a>
+    </div>
+    <div class="member">
+      <img src="./img/profilePictures/andrealobuglio.jpg" alt="Andrea Lo Buglio">
+      <div class="member-name">Andrea Lo Buglio</div>
+      <div class="member-role">0001193726</div>
+      <a href="mailto:andrea.lobuglio@studio.unibo.it">andrea.lobuglio@studio.unibo.it</a>
+    </div>
+  </div>
+  <script src="./script/index.js"></script>
+</body>
+</html>
+
