@@ -36,7 +36,7 @@
 
   <h3>1.3 Aim</h3>
   <p>
-    The aim of this phase is to finally deploy the projecy in a user-friendly way, so that the customer (or whoever wants to) can utilize it with just a few clicks.
+    The aim of this phase is to finally deploy the project in a user-friendly way, so that the customer (or whoever wants to) can utilize it with just a few clicks.
   </p>
 
   <h2>2. Problem analysis</h2>
@@ -68,19 +68,19 @@
     In our case, in order to carry out an overall test of the system, we will have to run up to eight different microservices, therefore using Docker will be appropriate.
     Also, the Docker Engine ensures that the system, in all its components, will run indipendently of the OS and the hardware the customer utilizes.<br>
     An image can be created using the command line, but the operation can be standardized using <span class="keyword">Dockerfiles</span>, i.e. text documents containing instructions, one per line, in the form of keywords followed by arguments.
-    The documentation can be found <a href="https://docs.docker.com/reference/dockerfile/">here</a>.
+    The documentation about them can be found <a href="https://docs.docker.com/reference/dockerfile/">here</a>.
   </p>
 
   <blockquote>Problem: correctly run a multi-container system</blockquote>
   <p>
-    The Maritime Cargo system will be composed of many containers that will need to be correctly instatiated, started, considering dependencies, and interconnected.
-    To this end, Docker provides a tool called <a href="https://docs.docker.com/compose/">Docker Compose</a>. It is configured using <span class="keyword-other">YAML</span> files and will enable the possibility of an almost "single-click" boot of the core system from the user perspective.
+    The Maritime Cargo system will be composed of many containers that will need to be correctly created, started, considering dependencies, and interconnected.
+    To this end, Docker provides a tool called <a href="https://docs.docker.com/compose/">Docker Compose</a>. It is configured using <span class="keyword-other">YAML</span> files and will enable the possibility of an almost "single-click" boot of the cargoservice and productservice subsystems from the user perspective.
   </p>
 
   <blockquote>Problem: how will the services find each other in order to communicate?</blockquote>
   <p>
-    While the system was deployed on the same machine, except for the ioport subsystem, all the software components were using the localhost address in order to communicate; obviously, since they will be distributed, this can no longer be the case.
-    To this end, Docker has an internal <span class="keyword-other">DNS system</span> that translates the names of the containers to their rescpective IP addresses, therefore the various "localhost" have been replaced with the name of the context to connect with.
+    While the system was deployed on the same machine, except for the ioport subsystem, all the software components were using the localhost address in order to communicate; obviously, since they will now be distributed, this can no longer be the case.
+    To this end, Docker has an internal <span class="keyword-other">DNS system</span> that translates the names of the containers to their rescpective IP addresses, therefore the various "localhost" have been replaced with the name of the container a given component wants to connect with.
   </p>
 
   <h2>3. Project</h2>
@@ -107,19 +107,20 @@
       <li>the tar file of the sub-project is copied and extract in place</li>
       <li>if necessary, additional files are also copied (e.g. hold's map configuration files for cargoservice)</li>
       <li>the working directory is set</li>
-      <li>a final command ennsures the software is started at startup</li>
+      <li>a final command ennsures the software is started at container's startup</li>
     </ul>
 
     Every image can be indipendently created with the<br>
     <code>docker build -t <i>name</i>:<i>version</i> .</code><br>
-    command exectued in the same directory of the Dockerfile, but an overall build of the system is achieved using Docker Compose.
+    command, exectued in the same directory of the Dockerfile, but an overall build of the system has been achieved using Docker Compose.
   </p>
 
   <h3>3.3 Docker Compose</h3>
   <p>
     For the purpose of managing the multiple containers the system is made of, a <a href="../iss25maritimecargo.yaml">iss25maritimecargo.yaml</a> file has been written.
     By default, it is configured to build the images of the five containers, it specifies the mapping of the ports so that the packets sent to those ports of the host machine are redirected to the right containers and it explicit the dependencies, so that the guis are effectively started after the core system.<br>
-    In order to load and start the <span class="keyword">Maritime Cargo</span> system the following command can be launched from the same directory of the yaml file (which needs to be the parent of the directories of the sub-projects, so that Docker Compose can also find the various Dockerfiles). 
+    In order to load and start the <span class="keyword">Maritime Cargo</span> system the following command can be launched from the same directory of the yaml file (which needs to be the parent of the directories of the sub-projects, so that Docker Compose can also find the various Dockerfiles):<br>
+    <code>docker-compose -p iss25maritimecargo -f iss25maritimecargo.yaml up --build</code>
   </p>
 
   <h2>4. How to boot the system from scratch</h2>
@@ -132,35 +133,38 @@
         Those files will be created in the build/distributions directory of the projects.
       </li>
       <li>
-        If it has not already been done (it can be verified with <code>docker network ls</code>), create the iss-network network used by basicrobot24, mosquitto, cargoservice and cargoservicegui to communicate inside docker using the command:<br>
+        Start Docker
+      </li>
+      <li>
+        If it has not already been done (it can be verified with <code>docker network ls</code>), create the <span class="keyword-other">iss-network</span> network, which is used by BasicRobot24, mosquitto, cargoservice and cargoservicegui to communicate inside Docker, using the command:<br>
         <code>docker network create iss-network</code>
       </li>
       <li>
-        Start docker and launch the three containers given by the customer, in the following order:
+        Launch the three containers given by the customer, in the following order:
         <ol>
           <li><span class="keyword">mosquitto</span></li>
           <li><span class="keyword">wenv</span></li>
-          <li><span class="keyword">baricrobot24</span></li>
+          <li><span class="keyword">BaricRobot24</span></li>
         </ol>
       </li>
       <li>
-        Open a terminal in the directory where the iss25maritimecargo.yaml file is and launch the command:<br>
+        Open a terminal in the directory where the iss25maritimecargo.yaml file is located and launch the command:<br>
         <code>docker-compose -p iss25maritimecargo -f iss25maritimecargo.yaml up --build</code><br>
         The <code>--build</code> ensures that the container are rebuilt if any changes has been made (or it is the first time, of course); in other scenarios it can be omitted
       </li>
       <li>
-        Connect every physical component to the RaspberryPi as it has been described in the <a href="../ioport/userDocs/DeSimoni-Grano-LoBuglio_sprint2_v1.html#43-physical-implementation">ioport documentation</a>
+        Connect every physical component to the <span class="keyword">RaspberryPi</span> as it has been described in the <a href="../ioport/userDocs/DeSimoni-Grano-LoBuglio_sprint2_v1.html#43-physical-implementation">ioport documentation</a>
       </li>
       <li>
-        Copy the distribution tar or zip file of the <span class="keyword">ioport</span> sub-system in the RaspberryPi file system and decompress it; 
-        also copy the three python scripts (i.e. <a href="../ioport/src/main/resources/sonar.py">sonar.py</a>, <a href="../ioport/src/main/resources/ledPython25On.py">ledPython25On.py</a> and <a href="../ioport/src/main/resources/ledPython25Off.py">ledPython25Off.py</a>)
-        in the bin directory (e.g. all of that can be done using the <span class="keyword-other">scp</span> command)
+        Copy the distribution tar or zip file of the <span class="keyword">ioport</span> sub-system in the <span class="keyword">RaspberryPi</span> file system and decompress it; 
+        also copy the three python scripts (i.e. <a href="../ioport/src/main/resources/sonar.py">sonar.py</a>, <a href="../ioport/src/main/resources/ledPython25On.py">ledPython25On.py</a> and <a href="../ioport/src/main/resources/ledPython25Off.py">ledPython25Off.py</a>, found <a href="../ioport/src/main/resources/">here</a>)
+        in the bin directory (all of that can be done using the <span class="keyword-other">scp</span> command)
       </li>
       <li>
-        In the bin directory of the decompressed files on the RaspberryPi launch the bash script <span class="keyword">iss25maritimecargo_ioport</span>
+        In the bin directory of the decompressed files on the <span class="keyword">RaspberryPi</span> launch the bash script <span class="keyword">iss25maritimecargo_ioport</span>
       </li>
       <li>
-        Open a browser and connect to localhost:3000 to see the <span class="keyword">status of the hold</span> and/or submit a <span class="keyword">load request</span> or open the HTML pages that can be found <a href="../productservicegui/src/main/resources/">here</a> to create or delete product
+        Open a browser and connect to <code>localhost:3000</code> to see the <span class="keyword">status of the hold</span> and/or submit a <span class="keyword">load request</span> or open the HTML pages that can be found <a href="../productservicegui/src/main/resources/">here</a> to create or delete product
       </li>
       <li>
         <span class="keyword">Enjoy the Maritime Cargo experience!</span>
