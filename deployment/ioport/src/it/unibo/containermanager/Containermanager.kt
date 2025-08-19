@@ -30,8 +30,10 @@ class Containermanager ( name: String, scope: CoroutineScope, isconfined: Boolea
 		//val interruptedStateTransitions = mutableListOf<Transition>()
 		//IF actor.withobj !== null val actor.withobj.name» = actor.withobj.method»ENDIF
 		
-				val DFREE = 10
+				val DFREE = 20.0
 				var containerCount = 0
+				
+				var allContainerLoaded = true
 		return { //this:ActionBasciFsm
 				state("init") { //this:State
 					action { //it:State
@@ -54,25 +56,60 @@ class Containermanager ( name: String, scope: CoroutineScope, isconfined: Boolea
 					sysaction { //it:State
 					}	 	 
 					 transition(edgeName="t00",targetState="evaluatedistance",cond=whenEvent("distance"))
+					transition(edgeName="t01",targetState="halt",cond=whenEvent("stop"))
 				}	 
 				state("evaluatedistance") { //this:State
 					action { //it:State
-						if(  containerCount < 3  
-						 ){if(  (V > 0) && (V < DFREE/2)  
-						 ){ containerCount += 1  
-						}
-						else
-						 {CommUtils.outmagenta("$name: new container waiting!")
-						 request("containerWaiting", "containerWaiting(V)" ,"cargoservice" )  
-						  containerCount = 0  
-						 }
+						CommUtils.outmagenta("$name in ${currentState.stateName} | $currentMsg | ${Thread.currentThread().getName()} n=${Thread.activeCount()}")
+						 	   
+						if( checkMsgContent( Term.createTerm("distance(D)"), Term.createTerm("distance(D)"), 
+						                        currentMsg.msgContent()) ) { //set msgArgList
+								 var D = payloadArg(0).toDouble()  
+								if(  containerCount < 3  
+								 ){if(  (D > 0) && (D < DFREE/2)  
+								 ){ containerCount += 1  
+								}
+								forward("goToWait", "goToWait(1)" ,name ) 
+								}
+								else
+								 {if(  allContainerLoaded  
+								  ){CommUtils.outmagenta("$name: new container waiting!")
+								 request("containerWaiting", "containerWaiting($D)" ,"cargoservice" )  
+								  
+								 						allContainerLoaded = false
+								 						containerCount = 0 
+								 }
+								 }
 						}
 						//genTimer( actor, state )
 					}
 					//After Lenzi Aug2002
 					sysaction { //it:State
 					}	 	 
-					 transition(edgeName="t11",targetState="wait",cond=whenReply("containerLoaded"))
+					 transition(edgeName="t12",targetState="wait",cond=whenDispatch("goToWait"))
+					transition(edgeName="t13",targetState="allcontainerloaded",cond=whenReply("containerLoaded"))
+				}	 
+				state("allcontainerloaded") { //this:State
+					action { //it:State
+						 
+									allContainerLoaded = true
+									containerCount = 0 
+						//genTimer( actor, state )
+					}
+					//After Lenzi Aug2002
+					sysaction { //it:State
+					}	 	 
+					 transition( edgeName="goto",targetState="wait", cond=doswitch() )
+				}	 
+				state("halt") { //this:State
+					action { //it:State
+						CommUtils.outmagenta("$name: STOPPED")
+						//genTimer( actor, state )
+					}
+					//After Lenzi Aug2002
+					sysaction { //it:State
+					}	 	 
+					 transition(edgeName="t24",targetState="wait",cond=whenEvent("resume"))
 				}	 
 			}
 		}

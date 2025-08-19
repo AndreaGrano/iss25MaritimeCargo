@@ -49,6 +49,8 @@ services:
       context: productservice/
     ports:
       - 8001:8001
+    networks:
+      - iss-network
 
   productservicegui:
     #container_name: iss25maritimecargo.productservicegui
@@ -62,7 +64,8 @@ services:
       productservice:
         condition: service_started
         restart: true
-
+    networks:
+      - iss-network
 
 networks:
   iss-network:

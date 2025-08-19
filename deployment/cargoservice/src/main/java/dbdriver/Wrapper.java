@@ -10,7 +10,6 @@ import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Sorts;
 import com.mongodb.client.model.Updates;
-import com.mongodb.client.result.DeleteResult;
 import com.mongodb.client.result.UpdateResult;
 
 import main.java.dbdriver.codecs.IntegerCodec;
@@ -20,13 +19,12 @@ import main.java.dbdriver.codecs.SlotCodec;
 import org.bson.codecs.configuration.CodecRegistries;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
-import org.bson.types.ObjectId;
 
 import java.util.*;
 
 public class Wrapper {
-	private static final String uri = "mongodb+srv://clarissadesimoni:GnBC8GnMfYw3y4N9@maritime-cargo.vyudu9t.mongodb.net/?retryWrites=true&w=majority&appName=maritime-cargo";
-
+	private static final String uri = "mongodb://mongodb:27017";
+	
 	private MongoClient client;
 	private MongoDatabase wrapper;
 	private MongoCollection<Product> products;
@@ -44,18 +42,9 @@ public class Wrapper {
 		this.wrapper = client.getDatabase("maritime-cargo");
 		this.products = wrapper.getCollection("products", Product.class);
 		this.slots = wrapper.getCollection("slots", Slot.class);
-	}
-	
-	public Product createProduct(String name, double weight) {
-        try {
-        	int pid = new ObjectId().getTimestamp();
-        	Product res = new Product(pid, name, weight);
-        	this.products.insertOne(res);
-        	return res;
-        } catch(MongoException e) {
-            System.err.println("Insert error: " + e);
-            return null;
-        }
+		
+		// Check if the hold exists in the db; if not, the function creates the hold
+		this.checkHold();
 	}
 	
 	public Product getProduct(int PID) {
@@ -94,44 +83,6 @@ public class Wrapper {
 		} catch(MongoException e) {
             System.err.println("Fetch error: " + e);
             return res;
-		}
-	}
-	
-	public Product deleteProduct(int PID) {
-		try {
-			Product res = this.getProduct(PID);
-			if(res == null) {
-				System.err.println("Unable to delete product with PID " + String.valueOf(PID));
-				return null;
-			}
-			DeleteResult result = products.deleteOne(Filters.eq("_id", PID));
-			if(result.getDeletedCount() > 0) return res;
-			else {
-				System.err.println("Unable to delete product with PID " + String.valueOf(PID));
-				return null;
-			}
-		} catch(MongoException e) {
-            System.err.println("Delete error: " + e);
-            return null;
-		}
-	}
-	
-	public Product deleteProductByName(String name) {
-		try {
-			Product res = this.getProductByName(name);
-			if(res == null) {
-				System.err.println("Unable to delete product with name '" + name + "'");
-				return null;
-			}
-			DeleteResult result = products.deleteOne(Filters.eq("name", name));
-			if(result.getDeletedCount() > 0) return res;
-			else {
-				System.err.println("Unable to delete product with name '" + name + "'");
-				return null;
-			}
-		} catch(MongoException e) {
-            System.err.println("Delete error: " + e);
-            return null;
 		}
 	}
 	
@@ -190,7 +141,23 @@ public class Wrapper {
         }
 	}
 	
-	public boolean resetHold() {
+	// Checks if the hold exists in the DB; if not, it creates the hold
+	public void checkHold() {
+		// Iterate over all four slots
+		for(int i = 1; i <= 4; i++) {
+			Slot res = this.getSlot(i);
+			
+			// If the current slot doesn't exist, it is created
+			if(res == null) {
+				Slot slot = new Slot(i, i, 0);
+				this.slots.insertOne(slot);
+				
+				System.err.println("Slot " + i + " created");
+			}
+		}
+	}
+	
+ 	public boolean resetHold() {
 		try {
 			UpdateResult result = slots.updateOne(
 				Filters.and(Filters.eq("PID", 0), Filters.gte("slotNumber", 1), Filters.lte("slotNumber", 4)),

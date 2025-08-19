@@ -9,9 +9,7 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Sorts;
-import com.mongodb.client.model.Updates;
 import com.mongodb.client.result.DeleteResult;
-import com.mongodb.client.result.UpdateResult;
 
 import main.java.dbdriver.codecs.IntegerCodec;
 import main.java.dbdriver.codecs.ProductCodec;
@@ -25,13 +23,11 @@ import org.bson.types.ObjectId;
 import java.util.*;
 
 public class Wrapper {
-	private static final String uri = "mongodb+srv://clarissadesimoni:GnBC8GnMfYw3y4N9@maritime-cargo.vyudu9t.mongodb.net/?retryWrites=true&w=majority&appName=maritime-cargo";
-	//private static final String uri = "mongodb+srv://clarissadesimoni:GnBC8GnMfYw3y4N9@maritime-cargo-products.si1ejsg.mongodb.net/?retryWrites=true&w=majority&appName=maritime-cargo-products";
-
+	private static final String uri = "mongodb://mongodb:27017";
+	
 	private MongoClient client;
 	private MongoDatabase wrapper;
 	private MongoCollection<Product> products;
-	private MongoCollection<Slot> slots;
 	
 	public Wrapper() {
 		CodecRegistry pojoCodecRegistry = CodecRegistries.fromProviders(PojoCodecProvider.builder().automatic(false).build());
@@ -44,7 +40,6 @@ public class Wrapper {
 
 		this.wrapper = client.getDatabase("maritime-cargo");
 		this.products = wrapper.getCollection("products", Product.class);
-		this.slots = wrapper.getCollection("slots", Slot.class);
 	}
 	
 	public Product createProduct(String name, double weight) {
@@ -135,74 +130,7 @@ public class Wrapper {
             return null;
 		}
 	}
-	
-	public int getFirstAvailableSlot() {
-		try {
-			Slot res = slots.find(Filters.and(Filters.eq("PID", 0), Filters.gte("slotNumber", 1), Filters.lte("slotNumber", 4))).sort(Sorts.ascending("slotNumber")).first();
-			if(res == null) {
-				System.err.println("No free slots available");
-				return 0;
-			}
-			else return res.getSlotNumber();
-		} catch(MongoException e) {
-            System.err.println("Fetch error: " + e);
-            return 0;
-		}
-	}
-	
-	public Slot getSlot(int slotNumber) {
-		try {
-			Slot res = slots.find(Filters.eq("slotNumber", slotNumber)).sort(Sorts.ascending("slotNumber")).first();
-			if(res == null) System.err.println("No slots were found with slotNumber " + String.valueOf(slotNumber));
-			return res;
-		} catch(MongoException e) {
-            System.err.println("Fetch error: " + e);
-            return null;
-		}
-	}
 
-	public List<Slot> getAllSlots() {
-		List<Slot> res = new ArrayList<>();
-		try {
-			slots.find().sort(Sorts.ascending("slotNumber")).iterator().forEachRemaining(p -> res.add(p));
-			return res;
-		} catch(MongoException e) {
-            System.err.println("Fetch error: " + e);
-            return res;
-		}
-	}
-	
-	public int loadProduct(int PID) {
-		try {
-            int slotNumber = getFirstAvailableSlot();
-            if (slotNumber > 0 && slotNumber < 5) {
-                UpdateResult result = slots.updateOne(
-                    Filters.eq("slotNumber", slotNumber),
-                    Updates.set("PID", PID)
-                );
-                return result.getModifiedCount() > 0 ? slotNumber : 0;
-            } else {
-                if (slotNumber >= 5) System.err.println("The hold is full");
-                return 0;
-            }
-        } catch (MongoException e) {
-            System.err.println("Update error: " + e);
-            return 0;
-        }
-	}
-	
-	public boolean resetHold() {
-		try {
-			UpdateResult result = slots.updateOne(
-				Filters.and(Filters.eq("PID", 0), Filters.gte("slotNumber", 1), Filters.lte("slotNumber", 4)),
-                Updates.set("PID", 0)
-            );
-			return result.getModifiedCount() > 0;
-		} catch(MongoException e) {
-            System.err.println("Fetch error: " + e);
-            return false;
-		}
-	}
 	
 	public void closeClient() {
 		this.client.close();
